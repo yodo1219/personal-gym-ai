@@ -20,6 +20,7 @@ export interface Client {
   mentalTendency: string;
   bingeTendency: string;
   sleepStatus: string;
+  lineUserId?: string;
   createdAt: string;
   updatedAt: string;
 }

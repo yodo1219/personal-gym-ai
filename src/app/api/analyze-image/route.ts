@@ -12,7 +12,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { clientId, fileName } = body;
 
-    // 複数枚対応：imagesがあれば複数、なければ単体
     const images: { base64: string; mimeType: string }[] = body.images
       ? body.images
       : [{ base64: body.base64Image, mimeType: body.mimeType ?? "image/jpeg" }];
@@ -21,12 +20,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "clientId と画像は必須です" }, { status: 400 });
     }
 
-    const client = getClient(clientId);
+    const client = await getClient(clientId);
     if (!client) {
       return NextResponse.json({ error: "顧客が見つかりません" }, { status: 404 });
     }
 
-    // 複数画像をまとめて解析・マージ
     const nutrition = await analyzeMultipleImages(images);
     const target = calcNutritionTarget(client);
     const evaluation = evaluateNutrition(nutrition, target);
@@ -53,7 +51,9 @@ export async function POST(req: NextRequest) {
     });
 
     const parsed = JSON.parse(
-      (aiResponse.choices[0].message.content ?? "{}").replace(/```json|```/g, "").trim()
+      (aiResponse.choices[0].message.content ?? "{}")
+        .replace(/```json|```/g, "")
+        .trim()
     );
 
     return NextResponse.json({
