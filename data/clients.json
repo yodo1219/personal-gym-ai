@@ -1,0 +1,22 @@
+[
+  {
+    "name": "テスト",
+    "gender": "male",
+    "age": 30,
+    "height": 170,
+    "weight": 80,
+    "bodyFat": 27,
+    "goal": "fat_loss",
+    "activityLevel": "active",
+    "allergies": "",
+    "medicalHistory": "",
+    "dislikedFoods": "",
+    "dietaryPolicy": "",
+    "mentalTendency": "",
+    "bingeTendency": "",
+    "sleepStatus": "",
+    "id": "3d396511-3b4a-4ad5-9cf9-68eb52bb3212",
+    "createdAt": "2026-05-13T08:31:26.978Z",
+    "updatedAt": "2026-05-13T08:31:26.978Z"
+  }
+]

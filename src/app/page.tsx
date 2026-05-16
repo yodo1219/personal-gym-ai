@@ -1,63 +1,118 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Client, MealEntry } from "@/types";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
 
-export default function Home() {
+export default function Dashboard() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [pendingMeals, setPendingMeals] = useState<MealEntry[]>([]);
+
+  useEffect(() => {
+    fetch("/api/clients").then((r) => r.json()).then(setClients);
+    fetch("/api/meals").then((r) => r.json()).then((meals: MealEntry[]) =>
+      setPendingMeals(meals.filter((m) => m.status !== "sent"))
+    );
+  }, []);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-200 px-6 py-4">
+        <h1 className="text-xl font-bold text-gray-900">🏋️ GymAI — 食事指導システム</h1>
+      </header>
+      <main className="max-w-4xl mx-auto p-6 space-y-6">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-sm text-gray-500 mb-1">登録顧客</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {clients.length}
+              <span className="text-sm font-normal text-gray-400 ml-1">名</span>
+            </p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-sm text-gray-500 mb-1">未確認の返信案</p>
+            <p className="text-3xl font-bold text-orange-500">
+              {pendingMeals.length}
+              <span className="text-sm font-normal text-gray-400 ml-1">件</span>
+            </p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-sm text-gray-500 mb-1">危険フラグ</p>
+            <p className="text-3xl font-bold text-red-500">
+              {pendingMeals.filter((m) => m.dangerLevel === "danger").length}
+              <span className="text-sm font-normal text-gray-400 ml-1">件</span>
+            </p>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {pendingMeals.length > 0 && (
+          <section>
+            <h2 className="font-semibold text-gray-700 mb-3">未確認の返信案</h2>
+            <div className="space-y-2">
+              {pendingMeals.map((meal) => {
+                const client = clients.find((c) => c.id === meal.clientId);
+                return (
+                  <Link
+                    key={meal.id}
+                    href={`/meals/${meal.id}`}
+                    className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-4 hover:border-blue-300 transition-colors"
+                  >
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {client?.name ?? "不明"}さん
+                      </p>
+                      <p className="text-sm text-gray-500 truncate max-w-xs">
+                        {meal.content.slice(0, 40)}...
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {meal.inputType === "image" && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                          📸 画像
+                        </span>
+                      )}
+                      {meal.dangerLevel === "danger" && (
+                        <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full font-medium">
+                          ⚠ 要確認
+                        </span>
+                      )}
+                      {meal.dangerLevel === "caution" && (
+                        <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-1 rounded-full font-medium">
+                          注意
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400">
+                        {format(new Date(meal.createdAt), "M/d HH:mm", { locale: ja })}
+                      </span>
+                      <span className="text-gray-400">→</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        <div className="flex gap-3">
+          <Link
+            href="/clients/new"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            + 顧客登録
+          </Link>
+          <Link
+            href="/meals"
+            className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
           >
-            Documentation
-          </a>
+            食事入力
+          </Link>
+          <Link
+            href="/clients"
+            className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            顧客一覧
+          </Link>
         </div>
       </main>
     </div>
