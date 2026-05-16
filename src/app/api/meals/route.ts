@@ -7,7 +7,8 @@ import { checkDanger } from "@/lib/danger-check";
 
 export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get("clientId") ?? undefined;
-  return NextResponse.json(getMeals(clientId));
+  const meals = await getMeals(clientId);
+  return NextResponse.json(meals);
 }
 
 export async function POST(req: NextRequest) {
@@ -21,15 +22,15 @@ export async function POST(req: NextRequest) {
     status: body.status ?? "pending",
     createdAt: body.createdAt ?? new Date().toISOString(),
   };
-  saveMeal(meal);
+  await saveMeal(meal);
   return NextResponse.json(meal, { status: 201 });
 }
 
 export async function PUT(req: NextRequest) {
   const meal: MealEntry = await req.json();
-  saveMeal(meal);
+  await saveMeal(meal);
   if (meal.status === "sent") {
-    const client = getClient(meal.clientId);
+    const client = await getClient(meal.clientId);
     if (client) {
       try { await appendMealToSheet(meal, client); }
       catch (e) { console.error("Sheets保存エラー:", e); }
