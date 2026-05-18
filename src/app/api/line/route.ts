@@ -140,10 +140,20 @@ async function analyzeAndReply(lineUserId: string) {
     );
 
     // 返信文の名前を正しく置き換え
-    aiReply = (parsed.reply ?? "")
+    let replyText = (parsed.reply ?? "")
       .replace(/\{name\}/g, clientName)
       .replace(/顧客様/g, `${clientName}さん`);
-  }
+
+    // 絵文字が含まれていない場合は追加
+    const hasEmoji = /[\u{1F300}-\u{1F9FF}]/u.test(replyText);
+    if (!hasEmoji) {
+      // 【出来ていること】の後に絵文字追加
+      replyText = replyText
+        .replace("【出来ていること】", "【出来ていること】✨")
+        .replace("【目的と目標を達成するために改善が必要なこと】", "【目的と目標を達成するために改善が必要なこと】💪");
+    }
+
+    aiReply = replyText;
 
   // 食事記録を保存
   const meal = {
