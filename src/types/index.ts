@@ -41,6 +41,8 @@ export interface NutritionData {
   rawText: string;
   appName: string | null;
   recordDate: string | null;
+  isFoodPhotoOnly?: boolean;
+  cookingMethods?: string[];
 }
 
 export interface NutritionTarget {

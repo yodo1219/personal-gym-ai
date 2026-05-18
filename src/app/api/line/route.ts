@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getClients, saveMeal, getClientByLineUserId } from "@/lib/storage";
 import { analyzeMultipleImages, calcNutritionTarget, evaluateNutrition } from "@/lib/vision";
-import { buildImageFeedbackPrompt } from "@/lib/prompts";
+import { buildImageFeedbackPrompt, buildFoodPhotoFeedbackPrompt, calcTarget } from "@/lib/prompts";
 import { checkDanger } from "@/lib/danger-check";
 import { supabase } from "@/lib/supabase";
 import { v4 as uuidv4 } from "uuid";
@@ -50,8 +50,25 @@ async function downloadImage(messageId: string): Promise<string> {
   return Buffer.from(buffer).toString("base64");
 }
 
+// LINEの表示名を取得
+async function getLineDisplayName(lineUserId: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://api.line.me/v2/bot/profile/${lineUserId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+        },
+      }
+    );
+    const data = await res.json();
+    return data.displayName ?? "";
+  } catch {
+    return "";
+  }
+}
+
 async function analyzeAndReply(lineUserId: string) {
-  // pending中の画像を全部取得
   const { data: pendingImages } = await supabase
     .from("line_images")
     .select("*")
@@ -76,6 +93,10 @@ async function analyzeAndReply(lineUserId: string) {
     return;
   }
 
+  // LINEの表示名を取得（顧客名として使用）
+  const lineDisplayName = await getLineDisplayName(lineUserId);
+  const clientName = client.name || lineDisplayName || "お客様";
+
   // 全画像をダウンロード
   const images: { base64: string; mimeType: string }[] = [];
   for (const img of pendingImages) {
@@ -97,7 +118,11 @@ async function analyzeAndReply(lineUserId: string) {
 
   let aiReply = "";
   if (dangerCheck.level !== "danger") {
-    const prompt = buildImageFeedbackPrompt(client, nutrition, evaluation, target);
+    // 食事写真のみの場合は専用プロンプト
+    const prompt = nutrition.isFoodPhotoOnly
+      ? buildFoodPhotoFeedbackPrompt(client, nutrition, target)
+      : buildImageFeedbackPrompt(client, nutrition, evaluation, target);
+
     const aiResponse = await openai.chat.completions.create({
       model: "gpt-4o",
       max_tokens: 1000,
@@ -113,7 +138,11 @@ async function analyzeAndReply(lineUserId: string) {
         .replace(/```json|```/g, "")
         .trim()
     );
-    aiReply = parsed.reply ?? "";
+
+    // 返信文の名前を正しく置き換え
+    aiReply = (parsed.reply ?? "")
+      .replace(/\{name\}/g, clientName)
+      .replace(/顧客様/g, `${clientName}さん`);
   }
 
   // 食事記録を保存
@@ -143,7 +172,6 @@ async function analyzeAndReply(lineUserId: string) {
     .eq("line_user_id", lineUserId)
     .eq("status", "pending");
 
-  // 返信
   if (dangerCheck.level === "danger") {
     await pushMessage(
       lineUserId,
@@ -171,11 +199,9 @@ export async function POST(req: NextRequest) {
       const replyToken = event.replyToken;
       const lineUserId = event.source.userId;
 
-      // テキストメッセージ
       if (event.message.type === "text") {
         const text = event.message.text.trim();
 
-        // 「送信完了」「完了」「おわり」などで解析開始
         if (
           text.includes("送信完了") ||
           text.includes("完了") ||
@@ -183,27 +209,27 @@ export async function POST(req: NextRequest) {
           text.includes("終わり") ||
           text.includes("以上")
         ) {
-          await replyToLine(replyToken, "ありがとうございます！まとめて解析しています🔍\n少々お待ちください！");
+          await replyToLine(
+            replyToken,
+            "ありがとうございます！まとめて解析しています🔍\n少々お待ちください！"
+          );
           await analyzeAndReply(lineUserId);
         } else {
           await replyToLine(
             replyToken,
-            "食事記録アプリのスクリーンショットを送ってください📸\n全部送り終わったら「完了」と送ってください！"
+            "食事記録アプリのスクリーンショットまたは食事の写真を送ってください📸\n全部送り終わったら「完了」と送ってください！"
           );
         }
         continue;
       }
 
-      // 画像メッセージ → 保存だけして待機
       if (event.message.type === "image") {
-        // line_imagesテーブルに保存
         await supabase.from("line_images").insert({
           line_user_id: lineUserId,
           message_id: event.message.id,
           status: "pending",
         });
 
-        // 何枚目か確認
         const { count } = await supabase
           .from("line_images")
           .select("*", { count: "exact" })

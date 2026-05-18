@@ -169,3 +169,51 @@ replyの中身は以下の構成にしてください：
 【目的と目標を達成するために改善が必要なこと】
 （改善点を1〜2個、理由とともに優しく）`;
 }
+export function buildFoodPhotoFeedbackPrompt(
+  client: Client,
+  nutrition: NutritionData,
+  target: NutritionTarget
+): string {
+  const allFoods = [
+    ...nutrition.meals.breakfast,
+    ...nutrition.meals.lunch,
+    ...nutrition.meals.dinner,
+    ...nutrition.meals.snack,
+  ];
+  const cookingMethods = (nutrition as any).cookingMethods ?? [];
+
+  return `あなたはパーソナルジムの食事指導トレーナーAIです。
+お客様が食事の写真を送ってくれました。
+写真から判断できる範囲で、トレーナーらしい温かい返信案をJSON形式で返してください。
+
+【顧客情報】
+${buildClientContext(client, target)}
+
+【写真から読み取った情報】
+推定食品: ${allFoods.join("、") || "不明"}
+調理法: ${cookingMethods.join("、") || "不明"}
+推定カロリー: ${nutrition.totalCalories ? `${nutrition.totalCalories}kcal` : "不明"}
+
+【食事指導方針】
+${DIET_POLICY}
+
+【返信ルール】
+・「お写真ありがとうございます！」から始める
+・見えている食品を具体的に褒める
+・揚げ物・炒め物など脂質が多そうな調理法は優しく伝える
+・数値が不明な場合は「写真から見る限り」という表現を使う
+・次の食事でできる具体的な提案を1つする
+・「〜でございますね！」「〜ましょう！」など明るく丁寧なトーン
+・改善点は1〜2個に絞る
+・医療診断はしない
+
+【出力JSON形式】
+${REPLY_JSON_SCHEMA}
+
+replyの中身は以下の構成にしてください：
+【出来ていること】
+（見えている食品の良い点を具体的に）
+
+【目的と目標を達成するために改善が必要なこと】
+（改善点を1〜2個、理由とともに優しく）`;
+}

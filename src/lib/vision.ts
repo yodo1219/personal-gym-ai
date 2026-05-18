@@ -3,47 +3,56 @@ import { NutritionData, NutritionEvaluation, NutritionTarget, Client } from "@/t
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// 画像の種類を判別
-type ImageType = "summary" | "meal_detail" | "unknown";
+type ImageType = "summary" | "meal_detail" | "food_photo" | "unknown";
 
 interface SingleImageResult {
   imageType: ImageType;
   nutrition: Partial<NutritionData>;
 }
 
-const VISION_SYSTEM_PROMPT = `あなたは食事記録アプリ（カロミル・あすけん等）のスクリーンショットを解析する専門AIです。
+const VISION_SYSTEM_PROMPT = `あなたは食事・栄養管理の専門AIです。
+送られてきた画像を解析し、必ず以下のJSON形式のみで返してください。
+JSON以外のテキストは一切出力しないでください。
 
-まず画像の種類を判別してください：
-- "summary": 1日の合計カロリー・PFC（たんぱく質・脂質・炭水化物）・食物繊維・食塩などの栄養数値がまとめて表示されている画面
-- "meal_detail": 朝食・昼食・夕食・間食などの食品名・メニュー名が一覧で表示されている画面
-- "unknown": どちらでもない
-
-必ず以下のJSON形式のみで返してください。JSON以外は一切出力しないでください。
+画像の種類を判別してください：
+- "summary": 食事記録アプリの1日の合計栄養数値（カロリー・PFC等）が表示されている画面
+- "meal_detail": 食事記録アプリの食品名・メニュー名が一覧表示されている画面
+- "food_photo": 実際の食事・料理・食品の写真
+- "unknown": その他
 
 {
-  "imageType": "summary" または "meal_detail" または "unknown",
-  "totalCalories": <数値またはnull（summaryのみ）>,
-  "protein": <数値またはnull（summaryのみ）>,
-  "fat": <数値またはnull（summaryのみ）>,
-  "carbs": <数値またはnull（summaryのみ）>,
-  "fiber": <数値またはnull（summaryのみ）>,
-  "salt": <数値またはnull（summaryのみ）>,
+  "imageType": "summary" または "meal_detail" または "food_photo" または "unknown",
+  "totalCalories": <数値またはnull>,
+  "protein": <数値またはnull>,
+  "fat": <数値またはnull>,
+  "carbs": <数値またはnull>,
+  "fiber": <数値またはnull>,
+  "salt": <数値またはnull>,
   "meals": {
     "breakfast": ["食品名1", "食品名2"],
     "lunch": ["食品名1"],
     "dinner": ["食品名1"],
     "snack": ["食品名1"]
   },
+  "estimatedCalories": <食事写真から推定したカロリー数値またはnull>,
+  "estimatedFoods": ["推定食品1", "推定食品2"],
+  "cookingMethods": ["調理法1", "調理法2"],
   "rawText": "画像に写っているテキストをすべて書き起こした文字列",
   "appName": "カロミル または あすけん または MyFitnessPal または 不明",
   "recordDate": "YYYY-MM-DD形式またはnull"
 }
 
 【重要ルール】
-- summaryの場合：栄養数値を読み取る。mealsは空配列でOK
-- meal_detailの場合：食品名を朝昼夜間食に分けて読み取る。栄養数値はnullでOK
-- 単位はkcal・gに統一（mg→g変換すること）
-- 読み取れない項目はnull or 空配列`;
+- summaryの場合：栄養数値を正確に読み取る
+- meal_detailの場合：食品名を朝昼夜間食に分けて読み取る
+- food_photoの場合：
+  * 見えている料理・食品をすべてestimatedFoodsに列挙する
+  * 調理法（揚げ物・炒め物・蒸し物等）をcookingMethodsに記載
+  * カロリーを推定してestimatedCaloriesに記載
+  * 食事の時間帯が推定できればmealsに振り分ける
+  * 脂質が多そうな食品は必ず含める
+- 単位はkcal・gに統一
+- 読み取れない項目はnullまたは空配列`;
 
 async function analyzeSingleImage(
   base64Image: string,
@@ -66,7 +75,7 @@ async function analyzeSingleImage(
           },
           {
             type: "text",
-            text: "この画像の種類を判別し、栄養情報と食事内容を読み取ってJSON形式で返してください。",
+            text: "この画像を解析してJSON形式で返してください。",
           },
         ],
       },
@@ -81,7 +90,7 @@ async function analyzeSingleImage(
     return {
       imageType: parsed.imageType ?? "unknown",
       nutrition: {
-        totalCalories: parsed.totalCalories ?? null,
+        totalCalories: parsed.totalCalories ?? parsed.estimatedCalories ?? null,
         protein: parsed.protein ?? null,
         fat: parsed.fat ?? null,
         carbs: parsed.carbs ?? null,
@@ -93,6 +102,9 @@ async function analyzeSingleImage(
           dinner: parsed.meals?.dinner ?? [],
           snack: parsed.meals?.snack ?? [],
         },
+        estimatedFoods: parsed.estimatedFoods ?? [],
+        cookingMethods: parsed.cookingMethods ?? [],
+        isFoodPhoto: parsed.imageType === "food_photo",
         rawText: parsed.rawText ?? "",
         appName: parsed.appName ?? null,
         recordDate: parsed.recordDate ?? null,
@@ -111,7 +123,6 @@ async function analyzeSingleImage(
   }
 }
 
-// 複数画像を解析してマージ
 export async function analyzeMultipleImages(
   images: { base64: string; mimeType: string }[]
 ): Promise<NutritionData> {
@@ -119,32 +130,54 @@ export async function analyzeMultipleImages(
     images.map((img) => analyzeSingleImage(img.base64, img.mimeType))
   );
 
-  // summaryとmeal_detailを分ける
   const summaryResult = results.find((r) => r.imageType === "summary");
   const mealResults = results.filter((r) => r.imageType === "meal_detail");
+  const foodPhotoResults = results.filter((r) => r.imageType === "food_photo");
   const unknownResults = results.filter((r) => r.imageType === "unknown");
 
-  // 栄養数値はsummaryから取得（なければunknownから）
   const nutritionSource = summaryResult ?? unknownResults[0];
 
-  // 食事内容はmeal_detailから集約（なければsummaryやunknownから）
   const allMealSources = mealResults.length > 0
     ? mealResults
+    : foodPhotoResults.length > 0
+    ? foodPhotoResults
     : [summaryResult, ...unknownResults].filter(Boolean);
 
+  // 食事写真の推定食品をmealsに統合
+  const foodPhotoFoods = foodPhotoResults.flatMap(
+    (r) => (r.nutrition as any).estimatedFoods ?? []
+  );
+
   const mergedMeals = {
-    breakfast: allMealSources.flatMap((r) => r?.nutrition.meals?.breakfast ?? []),
-    lunch: allMealSources.flatMap((r) => r?.nutrition.meals?.lunch ?? []),
-    dinner: allMealSources.flatMap((r) => r?.nutrition.meals?.dinner ?? []),
-    snack: allMealSources.flatMap((r) => r?.nutrition.meals?.snack ?? []),
+    breakfast: [
+      ...allMealSources.flatMap((r) => r?.nutrition.meals?.breakfast ?? []),
+    ],
+    lunch: [
+      ...allMealSources.flatMap((r) => r?.nutrition.meals?.lunch ?? []),
+    ],
+    dinner: [
+      ...allMealSources.flatMap((r) => r?.nutrition.meals?.dinner ?? []),
+      ...foodPhotoFoods,
+    ],
+    snack: [
+      ...allMealSources.flatMap((r) => r?.nutrition.meals?.snack ?? []),
+    ],
   };
 
   const rawText = results.map((r) => r.nutrition.rawText ?? "").join("\n");
   const appName = results.find((r) => r.nutrition.appName)?.nutrition.appName ?? null;
   const recordDate = results.find((r) => r.nutrition.recordDate)?.nutrition.recordDate ?? null;
 
+  // 食事写真の場合は推定カロリーを使用
+  const estimatedCalories = foodPhotoResults.reduce((sum, r) => {
+    return sum + (r.nutrition.totalCalories ?? 0);
+  }, 0);
+
+  const isFoodPhotoOnly = foodPhotoResults.length > 0 && !summaryResult;
+
   return {
-    totalCalories: nutritionSource?.nutrition.totalCalories ?? null,
+    totalCalories: nutritionSource?.nutrition.totalCalories ??
+      (isFoodPhotoOnly && estimatedCalories > 0 ? estimatedCalories : null),
     protein: nutritionSource?.nutrition.protein ?? null,
     fat: nutritionSource?.nutrition.fat ?? null,
     carbs: nutritionSource?.nutrition.carbs ?? null,
@@ -154,10 +187,13 @@ export async function analyzeMultipleImages(
     rawText,
     appName,
     recordDate,
-  };
+    isFoodPhotoOnly,
+    cookingMethods: foodPhotoResults.flatMap(
+      (r) => (r.nutrition as any).cookingMethods ?? []
+    ),
+  } as NutritionData;
 }
 
-// 後方互換性のため1枚用も残す
 export async function analyzeImageNutrition(
   base64Image: string,
   mimeType: string = "image/jpeg"
