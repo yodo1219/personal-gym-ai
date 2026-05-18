@@ -219,3 +219,122 @@ replyの中身は必ずこの構成にしてください：
 【目的と目標を達成するために改善が必要なこと】
 （改善点を1〜2個、理由とともに優しく。文末は「！」で終わる）`;
 }
+
+// 毎回の返信に追加する「今日のおすすめ栄養素」
+export function buildNutrientTip(nutrition: NutritionData, client: Client): string {
+  const tips = [
+    {
+      condition: (n: NutritionData) => n.protein !== null && n.protein < 50,
+      tip: "💡 今日のワンポイント｜たんぱく質\nたんぱく質は筋肉・肌・髪の材料になります！鶏むね肉・卵・豆腐などに多く含まれています。目安は体重×1.5g/日です！",
+    },
+    {
+      condition: (n: NutritionData) => n.fiber !== null && n.fiber < 15,
+      tip: "💡 今日のワンポイント｜食物繊維\n食物繊維は腸内環境を整えて脂肪の吸収を緩やかにします！ブロッコリー・きのこ・海藻類に豊富です！",
+    },
+    {
+      condition: (n: NutritionData) => n.fat !== null && n.fat > 60,
+      tip: "💡 今日のワンポイント｜オメガ3脂肪酸\n脂質を摂るなら質にこだわりましょう！サーモン・サバ・亜麻仁油に含まれるオメガ3は体の炎症を抑える良い脂質です！",
+    },
+    {
+      condition: (n: NutritionData) => n.salt !== null && n.salt > 6,
+      tip: "💡 今日のワンポイント｜カリウム\n塩分が多めの日はカリウムで調整しましょう！バナナ・アボカド・ほうれん草に豊富で、むくみ解消にも効果的です！",
+    },
+  ];
+
+  // 条件に合うtipを選ぶ（なければデフォルト）
+  const matched = tips.find((t) => t.condition(nutrition));
+  if (matched) return matched.tip;
+
+  // デフォルトtip
+  const defaultTips = [
+    "💡 今日のワンポイント｜ビタミンD\nビタミンDは骨を強くして免疫力を高めます！鮭・きのこ・卵黄に含まれています。日光浴でも生成されますよ！",
+    "💡 今日のワンポイント｜マグネシウム\nマグネシウムは300以上の体内反応に関わる超重要ミネラルです！ナッツ・豆類・バナナに豊富です！",
+    "💡 今日のワンポイント｜ビタミンC\nビタミンCはコラーゲン生成・免疫強化・鉄の吸収を助けます！ブロッコリー・パプリカ・キウイに豊富です！",
+    "💡 今日のワンポイント｜亜鉛\n亜鉛は代謝・免疫・肌の健康に欠かせません！牡蠣・牛肉・ナッツ類に豊富です！",
+  ];
+  const idx = new Date().getDay() % defaultTips.length;
+  return defaultTips[idx];
+}
+
+// 詳細栄養素解説プロンプト
+export function buildDetailedNutritionPrompt(
+  client: Client,
+  nutrition: NutritionData,
+  target: NutritionTarget
+): string {
+  const allFoods = [
+    ...nutrition.meals.breakfast,
+    ...nutrition.meals.lunch,
+    ...nutrition.meals.dinner,
+    ...nutrition.meals.snack,
+  ];
+
+  return `あなたはパーソナルジムの管理栄養士AIです。
+お客様から詳しい栄養素解説のリクエストがありました。
+専門的でありながらわかりやすく、具体的な食品名を使って解説してください。
+
+【顧客情報】
+${buildClientContext(client, target)}
+
+【本日の食事内容】
+${allFoods.join("、") || "不明"}
+総カロリー: ${nutrition.totalCalories ?? "不明"}kcal
+たんぱく質: ${nutrition.protein ?? "不明"}g
+脂質: ${nutrition.fat ?? "不明"}g
+炭水化物: ${nutrition.carbs ?? "不明"}g
+食物繊維: ${nutrition.fiber ?? "不明"}g
+食塩相当量: ${nutrition.salt ?? "不明"}g
+
+【既往歴・体質】
+${client.medicalHistory || "特記なし"}
+
+【解説ルール】
+・本日の食事内容をもとに不足・過剰な栄養素を3つピックアップする
+・各栄養素について以下を説明する：
+  - どんな効果があるか
+  - 今日の食事でどれくらい摂れているか
+  - どの食品に多く含まれるか
+  - 既往歴・体質に関係する場合は特記する
+・「〜でございますね！」「〜ましょう！」など明るく丁寧なトーン
+・絵文字を適度に使う
+・医療診断はしない
+・文末は「！」で終わる
+
+以下の形式で返してください（JSONではなく通常テキスト）：
+
+📊 本日の栄養素詳細レポート
+
+【①栄養素名】
+効果：〜
+今日の摂取：〜
+多く含む食品：〜
+
+【②栄養素名】
+効果：〜
+今日の摂取：〜
+多く含む食品：〜
+
+【③栄養素名】
+効果：〜
+今日の摂取：〜
+多く含む食品：〜
+
+まとめ：〜`;
+}
+
+// 初回オンボーディングの質問
+export function getOnboardingMessage(step: string, name?: string): string {
+  const messages: Record<string, string> = {
+    start: `はじめまして！GymAI食事指導システムへようこそ🎉\n\nより精度の高い食事アドバイスのために、いくつか教えてください！\n\nまずお名前を教えてください😊`,
+    age: `${name}さん、よろしくお願いします！\n\n次に年齢を教えてください！\n（例：28）`,
+    gender: `ありがとうございます！\n\n性別を教えてください！\n「男性」または「女性」と送ってください😊`,
+    height: `ありがとうございます！\n\n身長を教えてください！\n（例：165）`,
+    weight: `ありがとうございます！\n\n現在の体重を教えてください！\n（例：58）`,
+    goal: `ありがとうございます！\n\n目標を教えてください！\n以下から選んで送ってください😊\n\n1️⃣ 減量・体脂肪を減らしたい\n2️⃣ 筋肉を増やしたい\n3️⃣ 現状維持・健康増進`,
+    medical_history: `ありがとうございます！\n\n既往歴や持病があれば教えてください！\n（例：高血圧、なし、花粉症など）\n\n※食事アドバイスの参考にするためです。医療相談ではありません😊`,
+    allergies: `ありがとうございます！\n\nアレルギーや苦手な食べ物があれば教えてください！\n（例：エビアレルギー、なし）`,
+    constitution: `ありがとうございます！\n\n最後に体質や気になることを教えてください！\n（例：冷え性、むくみやすい、疲れやすい、なし）`,
+    complete: `${name}さんの情報を登録しました🎉\n\nこれからカロミルやあすけんのスクリーンショット、または食事の写真を送ってください📸\n\n全部送り終わったら「完了」と送ってください！\nAIがまとめて解析してアドバイスをお届けします💪`,
+  };
+  return messages[step] ?? messages.start;
+}
