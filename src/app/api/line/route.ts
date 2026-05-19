@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getClients, saveMeal, getClientByLineUserId, saveClient } from "@/lib/storage";
+import { getClients, saveMeal, getClientByLineUserId } from "@/lib/storage";
 import { analyzeMultipleImages, calcNutritionTarget, evaluateNutrition } from "@/lib/vision";
 import {
   buildImageFeedbackPrompt,
   buildFoodPhotoFeedbackPrompt,
-  buildDetailedNutritionPrompt,
   buildNutrientTip,
-  getOnboardingMessage,
-  calcTarget,
 } from "@/lib/prompts";
 import { checkDanger } from "@/lib/danger-check";
 import { supabase } from "@/lib/supabase";
 import { v4 as uuidv4 } from "uuid";
 import OpenAI from "openai";
-import { Client } from "@/types";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -75,125 +71,6 @@ async function getLineDisplayName(lineUserId: string): Promise<string> {
   }
 }
 
-async function handleOnboarding(
-  lineUserId: string,
-  replyToken: string,
-  text: string
-) {
-  const { data: onboarding } = await supabase
-    .from("line_onboarding")
-    .select("*")
-    .eq("line_user_id", lineUserId)
-    .single();
-
-  const step = onboarding?.step ?? "start";
-
-  if (step === "start") {
-    await supabase.from("line_onboarding").upsert({
-      line_user_id: lineUserId,
-      step: "age",
-      name: text,
-    });
-    await replyToLine(replyToken, getOnboardingMessage("age", text));
-    return true;
-  }
-  if (step === "age") {
-    await supabase.from("line_onboarding")
-      .update({ step: "gender", age: text })
-      .eq("line_user_id", lineUserId);
-    await replyToLine(replyToken, getOnboardingMessage("gender", onboarding.name));
-    return true;
-  }
-  if (step === "gender") {
-    await supabase.from("line_onboarding")
-      .update({ step: "height", gender: text })
-      .eq("line_user_id", lineUserId);
-    await replyToLine(replyToken, getOnboardingMessage("height", onboarding.name));
-    return true;
-  }
-  if (step === "height") {
-    await supabase.from("line_onboarding")
-      .update({ step: "weight", height: text })
-      .eq("line_user_id", lineUserId);
-    await replyToLine(replyToken, getOnboardingMessage("weight", onboarding.name));
-    return true;
-  }
-  if (step === "weight") {
-    await supabase.from("line_onboarding")
-      .update({ step: "goal", weight: text })
-      .eq("line_user_id", lineUserId);
-    await replyToLine(replyToken, getOnboardingMessage("goal", onboarding.name));
-    return true;
-  }
-  if (step === "goal") {
-    const goalMap: Record<string, string> = {
-      "1": "fat_loss", "減量": "fat_loss", "体脂肪": "fat_loss",
-      "2": "muscle_gain", "筋肉": "muscle_gain",
-      "3": "maintain", "現状維持": "maintain", "健康": "health",
-    };
-    const goal = Object.entries(goalMap).find(([k]) => text.includes(k))?.[1] ?? "fat_loss";
-    await supabase.from("line_onboarding")
-      .update({ step: "medical_history", goal })
-      .eq("line_user_id", lineUserId);
-    await replyToLine(replyToken, getOnboardingMessage("medical_history", onboarding.name));
-    return true;
-  }
-  if (step === "medical_history") {
-    await supabase.from("line_onboarding")
-      .update({ step: "allergies", medical_history: text })
-      .eq("line_user_id", lineUserId);
-    await replyToLine(replyToken, getOnboardingMessage("allergies", onboarding.name));
-    return true;
-  }
-  if (step === "allergies") {
-    await supabase.from("line_onboarding")
-      .update({ step: "constitution", allergies: text })
-      .eq("line_user_id", lineUserId);
-    await replyToLine(replyToken, getOnboardingMessage("constitution", onboarding.name));
-    return true;
-  }
-  if (step === "constitution") {
-    await supabase.from("line_onboarding")
-      .update({ step: "complete", constitution: text, completed: true })
-      .eq("line_user_id", lineUserId);
-
-    const { data: ob } = await supabase
-      .from("line_onboarding")
-      .select("*")
-      .eq("line_user_id", lineUserId)
-      .single();
-
-    const genderMap: Record<string, string> = {
-      "男性": "male", "男": "male", "女性": "female", "女": "female",
-    };
-
-    const newClient: Client = {
-      id: uuidv4(),
-      name: ob.name ?? "未設定",
-      age: parseInt(ob.age ?? "30"),
-      gender: (genderMap[ob.gender ?? ""] ?? "other") as Client["gender"],
-      height: parseFloat(ob.height ?? "160"),
-      weight: parseFloat(ob.weight ?? "60"),
-      goal: (ob.goal ?? "health") as Client["goal"],
-      activityLevel: "moderate",
-      allergies: ob.allergies ?? "",
-      medicalHistory: ob.medical_history ?? "",
-      dislikedFoods: "",
-      dietaryPolicy: "",
-      mentalTendency: "",
-      bingeTendency: "",
-      sleepStatus: "",
-      lineUserId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    await saveClient(newClient);
-    await replyToLine(replyToken, getOnboardingMessage("complete", ob.name));
-    return true;
-  }
-  return false;
-}
-
 async function analyzeAndReply(lineUserId: string) {
   const { data: pendingImages } = await supabase
     .from("line_images")
@@ -211,7 +88,10 @@ async function analyzeAndReply(lineUserId: string) {
   }
 
   if (!client) {
-    await pushMessage(lineUserId, "顧客情報が見つかりませんでした。トレーナーにご連絡ください。");
+    await pushMessage(
+      lineUserId,
+      "申し訳ありません。顧客情報が見つかりませんでした。トレーナーにご連絡ください。"
+    );
     return;
   }
 
@@ -298,7 +178,10 @@ async function analyzeAndReply(lineUserId: string) {
     .eq("status", "pending");
 
   if (dangerCheck.level === "danger") {
-    await pushMessage(lineUserId, "ありがとうございます！内容を確認してトレーナーよりご連絡いたします。");
+    await pushMessage(
+      lineUserId,
+      "ありがとうございます！内容を確認してトレーナーよりご連絡いたします。"
+    );
     return;
   }
 
@@ -325,101 +208,28 @@ export async function POST(req: NextRequest) {
         const text = event.message.text.trim();
 
         if (
-          text.includes("詳しく") ||
-          text.includes("詳細") ||
-          text.includes("栄養素") ||
-          text.includes("もっと教えて")
-        ) {
-          let client = await getClientByLineUserId(lineUserId);
-          if (!client) {
-            const clients = await getClients();
-            client = clients[0];
-          }
-          if (client) {
-            const { data: latestMeal } = await supabase
-              .from("meals")
-              .select("*")
-              .eq("client_id", client.id)
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .single();
-
-            if (latestMeal?.nutrition) {
-              const target = calcTarget(client);
-              const prompt = buildDetailedNutritionPrompt(client, latestMeal.nutrition, target);
-              const aiResponse = await openai.chat.completions.create({
-                model: "gpt-4o",
-                max_tokens: 1500,
-                messages: [
-                  { role: "system", content: prompt },
-                  { role: "user", content: "詳細な栄養素解説をお願いします。" },
-                ],
-                temperature: 0.7,
-              });
-              const detailReply = aiResponse.choices[0].message.content ?? "";
-              await replyToLine(replyToken, detailReply);
-              continue;
-            }
-          }
-          await replyToLine(replyToken, "まずは食事記録のスクリーンショットを送ってください📸");
-          continue;
-        }
-
-        if (
           text.includes("送信完了") ||
           text.includes("完了") ||
           text.includes("おわり") ||
           text.includes("終わり") ||
           text.includes("以上")
         ) {
-          await replyToLine(replyToken, "ありがとうございます！まとめて解析しています🔍\n少々お待ちください！");
+          await replyToLine(
+            replyToken,
+            "ありがとうございます！まとめて解析しています🔍\n少々お待ちください！"
+          );
           await analyzeAndReply(lineUserId);
           continue;
         }
 
-        const { data: onboarding } = await supabase
-          .from("line_onboarding")
-          .select("*")
-          .eq("line_user_id", lineUserId)
-          .single();
-
-        if (!onboarding) {
-          await supabase.from("line_onboarding").insert({
-            line_user_id: lineUserId,
-            step: "start",
-          });
-          await replyToLine(replyToken, getOnboardingMessage("start"));
-          continue;
-        }
-
-        if (!onboarding.completed) {
-          const handled = await handleOnboarding(lineUserId, replyToken, text);
-          if (handled) continue;
-        }
-
         await replyToLine(
           replyToken,
-          "食事記録アプリのスクリーンショットまたは食事の写真を送ってください📸\n全部送り終わったら「完了」と送ってください！\n\n詳しい栄養素解説は「詳しく」と送ってください💡"
+          "食事記録アプリのスクリーンショットまたは食事の写真を送ってください📸\n全部送り終わったら「完了」と送ってください！"
         );
         continue;
       }
 
       if (event.message.type === "image") {
-        const { data: onboarding } = await supabase
-          .from("line_onboarding")
-          .select("*")
-          .eq("line_user_id", lineUserId)
-          .single();
-
-        if (!onboarding || !onboarding.completed) {
-          await supabase.from("line_onboarding").upsert({
-            line_user_id: lineUserId,
-            step: "start",
-          });
-          await replyToLine(replyToken, getOnboardingMessage("start"));
-          continue;
-        }
-
         await supabase.from("line_images").insert({
           line_user_id: lineUserId,
           message_id: event.message.id,
