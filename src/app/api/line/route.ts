@@ -75,7 +75,6 @@ async function getLineDisplayName(lineUserId: string): Promise<string> {
   }
 }
 
-// オンボーディング処理
 async function handleOnboarding(
   lineUserId: string,
   replyToken: string,
@@ -90,7 +89,6 @@ async function handleOnboarding(
   const step = onboarding?.step ?? "start";
 
   if (step === "start") {
-    // 名前を保存してage stepへ
     await supabase.from("line_onboarding").upsert({
       line_user_id: lineUserId,
       step: "age",
@@ -99,7 +97,6 @@ async function handleOnboarding(
     await replyToLine(replyToken, getOnboardingMessage("age", text));
     return true;
   }
-
   if (step === "age") {
     await supabase.from("line_onboarding")
       .update({ step: "gender", age: text })
@@ -107,7 +104,6 @@ async function handleOnboarding(
     await replyToLine(replyToken, getOnboardingMessage("gender", onboarding.name));
     return true;
   }
-
   if (step === "gender") {
     await supabase.from("line_onboarding")
       .update({ step: "height", gender: text })
@@ -115,7 +111,6 @@ async function handleOnboarding(
     await replyToLine(replyToken, getOnboardingMessage("height", onboarding.name));
     return true;
   }
-
   if (step === "height") {
     await supabase.from("line_onboarding")
       .update({ step: "weight", height: text })
@@ -123,7 +118,6 @@ async function handleOnboarding(
     await replyToLine(replyToken, getOnboardingMessage("weight", onboarding.name));
     return true;
   }
-
   if (step === "weight") {
     await supabase.from("line_onboarding")
       .update({ step: "goal", weight: text })
@@ -131,7 +125,6 @@ async function handleOnboarding(
     await replyToLine(replyToken, getOnboardingMessage("goal", onboarding.name));
     return true;
   }
-
   if (step === "goal") {
     const goalMap: Record<string, string> = {
       "1": "fat_loss", "減量": "fat_loss", "体脂肪": "fat_loss",
@@ -145,7 +138,6 @@ async function handleOnboarding(
     await replyToLine(replyToken, getOnboardingMessage("medical_history", onboarding.name));
     return true;
   }
-
   if (step === "medical_history") {
     await supabase.from("line_onboarding")
       .update({ step: "allergies", medical_history: text })
@@ -153,7 +145,6 @@ async function handleOnboarding(
     await replyToLine(replyToken, getOnboardingMessage("allergies", onboarding.name));
     return true;
   }
-
   if (step === "allergies") {
     await supabase.from("line_onboarding")
       .update({ step: "constitution", allergies: text })
@@ -161,13 +152,11 @@ async function handleOnboarding(
     await replyToLine(replyToken, getOnboardingMessage("constitution", onboarding.name));
     return true;
   }
-
   if (step === "constitution") {
     await supabase.from("line_onboarding")
       .update({ step: "complete", constitution: text, completed: true })
       .eq("line_user_id", lineUserId);
 
-    // 顧客をDBに登録
     const { data: ob } = await supabase
       .from("line_onboarding")
       .select("*")
@@ -199,11 +188,9 @@ async function handleOnboarding(
       updatedAt: new Date().toISOString(),
     };
     await saveClient(newClient);
-
     await replyToLine(replyToken, getOnboardingMessage("complete", ob.name));
     return true;
   }
-
   return false;
 }
 
@@ -224,10 +211,7 @@ async function analyzeAndReply(lineUserId: string) {
   }
 
   if (!client) {
-    await pushMessage(
-      lineUserId,
-      "顧客情報が見つかりませんでした。トレーナーにご連絡ください。"
-    );
+    await pushMessage(lineUserId, "顧客情報が見つかりませんでした。トレーナーにご連絡ください。");
     return;
   }
 
@@ -275,9 +259,8 @@ async function analyzeAndReply(lineUserId: string) {
 
     let replyText = (parsed.reply ?? "")
       .replace(/\{name\}/g, clientName)
-      .replace(/顧客様/g, `${clientName}さん`);
+      .replace(/顧客様/g, clientName + "さん");
 
-    // 絵文字が含まれていない場合は追加
     const hasEmoji = /[\u{1F300}-\u{1F9FF}]/u.test(replyText);
     if (!hasEmoji) {
       replyText = replyText
@@ -285,7 +268,6 @@ async function analyzeAndReply(lineUserId: string) {
         .replace("【目的と目標を達成するために改善が必要なこと】", "【目的と目標を達成するために改善が必要なこと】💪");
     }
 
-    // 毎回の栄養素ワンポイントを追加
     const nutrientTip = buildNutrientTip(nutrition, client);
     aiReply = replyText + "\n\n" + nutrientTip;
   }
@@ -316,10 +298,7 @@ async function analyzeAndReply(lineUserId: string) {
     .eq("status", "pending");
 
   if (dangerCheck.level === "danger") {
-    await pushMessage(
-      lineUserId,
-      "ありがとうございます！内容を確認してトレーナーよりご連絡いたします。"
-    );
+    await pushMessage(lineUserId, "ありがとうございます！内容を確認してトレーナーよりご連絡いたします。");
     return;
   }
 
@@ -345,7 +324,6 @@ export async function POST(req: NextRequest) {
       if (event.message.type === "text") {
         const text = event.message.text.trim();
 
-        // 詳細栄養素リクエスト
         if (
           text.includes("詳しく") ||
           text.includes("詳細") ||
@@ -357,9 +335,7 @@ export async function POST(req: NextRequest) {
             const clients = await getClients();
             client = clients[0];
           }
-
           if (client) {
-            // 最新の食事記録を取得
             const { data: latestMeal } = await supabase
               .from("meals")
               .select("*")
@@ -370,12 +346,7 @@ export async function POST(req: NextRequest) {
 
             if (latestMeal?.nutrition) {
               const target = calcTarget(client);
-              const prompt = buildDetailedNutritionPrompt(
-                client,
-                latestMeal.nutrition,
-                target
-              );
-
+              const prompt = buildDetailedNutritionPrompt(client, latestMeal.nutrition, target);
               const aiResponse = await openai.chat.completions.create({
                 model: "gpt-4o",
                 max_tokens: 1500,
@@ -385,21 +356,15 @@ export async function POST(req: NextRequest) {
                 ],
                 temperature: 0.7,
               });
-
               const detailReply = aiResponse.choices[0].message.content ?? "";
               await replyToLine(replyToken, detailReply);
               continue;
             }
           }
-
-          await replyToLine(
-            replyToken,
-            "まずは食事記録のスクリーンショットを送ってください📸"
-          );
+          await replyToLine(replyToken, "まずは食事記録のスクリーンショットを送ってください📸");
           continue;
         }
 
-        // 完了ワード
         if (
           text.includes("送信完了") ||
           text.includes("完了") ||
@@ -407,22 +372,17 @@ export async function POST(req: NextRequest) {
           text.includes("終わり") ||
           text.includes("以上")
         ) {
-          await replyToLine(
-            replyToken,
-            "ありがとうございます！まとめて解析しています🔍\n少々お待ちください！"
-          );
+          await replyToLine(replyToken, "ありがとうございます！まとめて解析しています🔍\n少々お待ちください！");
           await analyzeAndReply(lineUserId);
           continue;
         }
 
-        // 初回登録チェック
         const { data: onboarding } = await supabase
           .from("line_onboarding")
           .select("*")
           .eq("line_user_id", lineUserId)
           .single();
 
-        // 未登録の場合はオンボーディング開始
         if (!onboarding) {
           await supabase.from("line_onboarding").insert({
             line_user_id: lineUserId,
@@ -432,21 +392,19 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // 登録未完了の場合はオンボーディング継続
         if (!onboarding.completed) {
           const handled = await handleOnboarding(lineUserId, replyToken, text);
           if (handled) continue;
         }
 
-        // 登録済みの通常メッセージ
         await replyToLine(
           replyToken,
           "食事記録アプリのスクリーンショットまたは食事の写真を送ってください📸\n全部送り終わったら「完了」と送ってください！\n\n詳しい栄養素解説は「詳しく」と送ってください💡"
         );
+        continue;
+      }
 
-      // 画像メッセージ
       if (event.message.type === "image") {
-        // 未登録チェック
         const { data: onboarding } = await supabase
           .from("line_onboarding")
           .select("*")
@@ -454,15 +412,11 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (!onboarding || !onboarding.completed) {
-          // 未登録の場合はオンボーディングを開始
           await supabase.from("line_onboarding").upsert({
             line_user_id: lineUserId,
             step: "start",
           });
-          await replyToLine(
-            replyToken,
-            getOnboardingMessage("start")
-          );
+          await replyToLine(replyToken, getOnboardingMessage("start"));
           continue;
         }
 
