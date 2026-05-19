@@ -207,6 +207,7 @@ export async function POST(req: NextRequest) {
       if (event.message.type === "text") {
         const text = event.message.text.trim();
 
+        // 完了ワード
         if (
           text.includes("送信完了") ||
           text.includes("完了") ||
@@ -222,6 +223,20 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
+        // LINEユーザーID確認
+        if (
+          text.includes("自分のID") ||
+          text.includes("マイID") ||
+          text.includes("ID教えて")
+        ) {
+          await replyToLine(
+            replyToken,
+            `あなたのLINEユーザーIDは：\n${lineUserId}\n\nこのIDをトレーナーにお伝えください！`
+          );
+          continue;
+        }
+
+        // デフォルト返信
         await replyToLine(
           replyToken,
           "食事記録アプリのスクリーンショットまたは食事の写真を送ってください📸\n全部送り終わったら「完了」と送ってください！"
