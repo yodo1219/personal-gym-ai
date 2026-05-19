@@ -422,8 +422,18 @@ export async function POST(req: NextRequest) {
           .eq("line_user_id", lineUserId)
           .single();
 
-        // 未登録 or 登録未完了
-        if (!onboarding || !onboarding.completed) {
+        // 未登録の場合はオンボーディング開始
+        if (!onboarding) {
+          await supabase.from("line_onboarding").insert({
+            line_user_id: lineUserId,
+            step: "start",
+          });
+          await replyToLine(replyToken, getOnboardingMessage("start"));
+          continue;
+        }
+
+        // 登録未完了の場合はオンボーディング継続
+        if (!onboarding.completed) {
           const handled = await handleOnboarding(lineUserId, replyToken, text);
           if (handled) continue;
         }
@@ -433,8 +443,6 @@ export async function POST(req: NextRequest) {
           replyToken,
           "食事記録アプリのスクリーンショットまたは食事の写真を送ってください📸\n全部送り終わったら「完了」と送ってください！\n\n詳しい栄養素解説は「詳しく」と送ってください💡"
         );
-        continue;
-      }
 
       // 画像メッセージ
       if (event.message.type === "image") {
