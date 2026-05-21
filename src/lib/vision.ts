@@ -188,8 +188,7 @@ export async function analyzeMultipleImages(
     : (isFoodPhotoOnly && estimatedCalories > 0 ? estimatedCalories : null);
 
   return {
-    totalCalories: nutritionSource?.nutrition.totalCalories ??
-      (isFoodPhotoOnly && estimatedCalories > 0 ? estimatedCalories : null),
+    totalCalories,
     protein: nutritionSource?.nutrition.protein ?? null,
     fat: nutritionSource?.nutrition.fat ?? null,
     carbs: nutritionSource?.nutrition.carbs ?? null,
