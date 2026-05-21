@@ -181,6 +181,12 @@ export async function analyzeMultipleImages(
 
   const isFoodPhotoOnly = foodPhotoResults.length > 0 && !summaryResult;
 
+  // 食事写真がある場合は推定カロリーを合算
+  const summaryCalories = nutritionSource?.nutrition.totalCalories ?? null;
+  const totalCalories = summaryCalories !== null
+    ? summaryCalories + (foodPhotoResults.length > 0 ? estimatedCalories : 0)
+    : (isFoodPhotoOnly && estimatedCalories > 0 ? estimatedCalories : null);
+
   return {
     totalCalories: nutritionSource?.nutrition.totalCalories ??
       (isFoodPhotoOnly && estimatedCalories > 0 ? estimatedCalories : null),
