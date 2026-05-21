@@ -5,6 +5,7 @@ import {
   buildImageFeedbackPrompt,
   buildFoodPhotoFeedbackPrompt,
   buildNutrientTip,
+  buildConsultationPrompt,
   buildDetailedNutritionPrompt,
   calcTarget,
 } from "@/lib/prompts";
@@ -286,6 +287,43 @@ export async function POST(req: NextRequest) {
             "まずは食事記録のスクリーンショットを送ってください📸"
           );
           continue;
+        }
+
+        // 食事相談（疑問文や相談ワードを検知）
+        if (
+          text.includes("食べてもいい") ||
+          text.includes("食べていい") ||
+          text.includes("食べたい") ||
+          text.includes("どうですか") ||
+          text.includes("いいですか") ||
+          text.includes("大丈夫ですか") ||
+          text.includes("おすすめ") ||
+          text.includes("相談") ||
+          text.includes("?") ||
+          text.includes("？")
+        ) {
+          let client = await getClientByLineUserId(lineUserId);
+          if (!client) {
+            const clients = await getClients();
+            client = clients[0];
+          }
+
+          if (client) {
+            const target = calcTarget(client);
+            const prompt = buildConsultationPrompt(client, target);
+            const aiResponse = await openai.chat.completions.create({
+              model: "gpt-4o",
+              max_tokens: 500,
+              messages: [
+                { role: "system", content: prompt },
+                { role: "user", content: text },
+              ],
+              temperature: 0.7,
+            });
+            const consultReply = aiResponse.choices[0].message.content ?? "";
+            await replyToLine(replyToken, consultReply);
+            continue;
+          }
         }
 
         // デフォルト返信
