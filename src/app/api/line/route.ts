@@ -113,7 +113,7 @@ async function analyzeAndReply(lineUserId: string) {
   if (images.length === 0) return;
 
   const nutrition = await analyzeMultipleImages(images);
-  const target = calcNutritionTarget(client);
+  const target = calcTarget(client);
   const evaluation = evaluateNutrition(nutrition, target);
   const dangerCheck = checkDanger(nutrition.rawText);
 
