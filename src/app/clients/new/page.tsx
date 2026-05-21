@@ -35,6 +35,10 @@ export default function NewClientPage() {
   const [bingeTendency, setBingeTendency] = useState("");
   const [sleepStatus, setSleepStatus] = useState("");
   const [lineUserId, setLineUserId] = useState("");
+  const [targetCalories, setTargetCalories] = useState("");
+const [targetProtein, setTargetProtein] = useState("");
+const [targetFat, setTargetFat] = useState("");
+const [targetCarbs, setTargetCarbs] = useState("");
 
   async function handleSubmit() {
     if (!name || !age || !height || !weight) {
@@ -55,6 +59,10 @@ export default function NewClientPage() {
         dislikedFoods, dietaryPolicy, mentalTendency,
         bingeTendency, sleepStatus,
         lineUserId,
+        targetCalories: targetCalories ? Number(targetCalories) : undefined,
+targetProtein: targetProtein ? Number(targetProtein) : undefined,
+targetFat: targetFat ? Number(targetFat) : undefined,
+targetCarbs: targetCarbs ? Number(targetCarbs) : undefined,
       }),
     });
     setSaving(false);
@@ -184,6 +192,46 @@ export default function NewClientPage() {
               placeholder="6時間程度、不眠気味など" rows={2}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none" />
           </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+  <p className="font-medium text-gray-700 border-b border-gray-100 pb-2">
+    目標栄養素（トレーナー設定）
+  </p>
+  <p className="text-xs text-gray-400">
+    入力がある場合はこの値を優先します。空欄の場合は自動計算します。
+  </p>
+  <div className="grid grid-cols-2 gap-3">
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">目標カロリー(kcal)</label>
+      <input type="number" value={targetCalories}
+        onChange={(e) => setTargetCalories(e.target.value)}
+        placeholder="1450"
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">目標たんぱく質(g)</label>
+      <input type="number" value={targetProtein}
+        onChange={(e) => setTargetProtein(e.target.value)}
+        placeholder="80"
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">目標脂質(g)</label>
+      <input type="number" value={targetFat}
+        onChange={(e) => setTargetFat(e.target.value)}
+        placeholder="37"
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">目標炭水化物(g)</label>
+      <input type="number" value={targetCarbs}
+        onChange={(e) => setTargetCarbs(e.target.value)}
+        placeholder="199"
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+    </div>
+  </div>
+</div>
+
           <div>
   <label className="block text-sm font-medium text-gray-700 mb-1">
     LINE ユーザーID

@@ -94,6 +94,10 @@ function toClient(row: any): Client {
     bingeTendency: row.binge_tendency ?? "",
     sleepStatus: row.sleep_status ?? "",
     lineUserId: row.line_user_id ?? "",
+    targetCalories: row.target_calories ?? undefined,
+    targetProtein: row.target_protein ?? undefined,
+    targetFat: row.target_fat ?? undefined,
+    targetCarbs: row.target_carbs ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -118,6 +122,10 @@ function fromClient(c: Client): any {
     binge_tendency: c.bingeTendency,
     sleep_status: c.sleepStatus,
     line_user_id: (c as any).lineUserId ?? "",
+    target_calories: (c as any).targetCalories ?? null,
+    target_protein: (c as any).targetProtein ?? null,
+    target_fat: (c as any).targetFat ?? null,
+    target_carbs: (c as any).targetCarbs ?? null,
     updated_at: new Date().toISOString(),
   };
 }

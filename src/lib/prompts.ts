@@ -1,6 +1,22 @@
 import { Client, NutritionData, NutritionEvaluation, NutritionTarget } from "@/types";
 
 export function calcTarget(client: Client): NutritionTarget {
+  // トレーナーが設定した値を優先
+  if (
+    (client as any).targetCalories &&
+    (client as any).targetProtein &&
+    (client as any).targetFat &&
+    (client as any).targetCarbs
+  ) {
+    return {
+      calories: (client as any).targetCalories,
+      protein: (client as any).targetProtein,
+      fat: (client as any).targetFat,
+      carbs: (client as any).targetCarbs,
+    };
+  }
+
+  // 設定がない場合は自動計算
   const bmr =
     client.gender === "male"
       ? 13.397 * client.weight + 4.799 * client.height - 5.677 * client.age + 88.362

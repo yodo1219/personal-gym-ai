@@ -23,6 +23,10 @@ export interface Client {
   lineUserId?: string;
   createdAt: string;
   updatedAt: string;
+  targetCalories?: number;
+targetProtein?: number;
+targetFat?: number;
+targetCarbs?: number;
 }
 
 export interface NutritionData {
