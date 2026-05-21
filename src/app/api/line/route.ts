@@ -114,6 +114,11 @@ async function analyzeAndReply(lineUserId: string) {
   if (images.length === 0) return;
 
   const nutrition = await analyzeMultipleImages(images);
+  console.log("nutrition解析結果:", JSON.stringify({
+    imageType: nutrition.isFoodPhotoOnly,
+    totalCalories: nutrition.totalCalories,
+    meals: nutrition.meals,
+  }));
   const target = calcTarget(client);
   const evaluation = evaluateNutrition(nutrition, target);
   const dangerCheck = checkDanger(nutrition.rawText);
@@ -360,3 +365,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "ok" });
   }
 }
+// このコードは追加しない
