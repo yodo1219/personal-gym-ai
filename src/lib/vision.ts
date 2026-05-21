@@ -12,48 +12,61 @@ interface SingleImageResult {
   nutrition: Partial<NutritionData>;
 }
 
-const VISION_SYSTEM_PROMPT = `あなたは食事・栄養管理の専門AIです。
-送られてきた画像を解析し、必ず以下のJSON形式のみで返してください。
-JSON以外のテキストは一切出力しないでください。
+const VISION_SYSTEM_PROMPT = `あなたは食事記録アプリのスクリーンショットと食事写真を解析する専門AIです。
+画像内のテキスト・数値を一字一句正確に読み取ることが最優先です。
+
+【文字・数値読み取りの厳守ルール】
+・画像内の数字は絶対に推測しない。見えている数字をそのまま読む
+・小数点・単位（kcal・g・mg）も正確に読む
+・似た数字（1と7、6と0、3と8など）は文脈から慎重に判断する
+・文字が小さくても拡大して読む（detail:highで送信されています）
+・読み取れない場合のみnullにする（推測値は入れない）
+・カロミル・あすけん・MyFitnessPalなど各アプリのUI構造を理解して読む
+
+【カロミルの場合】
+・上部の大きな数字が総カロリー
+・PFCは「たんぱく質・脂質・炭水化物」の順で表示
+・グラフの下に数値が表示される
+
+【あすけんの場合】
+・「今日の食事」画面に総カロリーとPFCが表示
+・食品名リストから朝昼夜間食を読み取る
 
 画像の種類を判別してください：
-- "summary": 食事記録アプリの1日の合計栄養数値（カロリー・PFC等）が表示されている画面
-- "meal_detail": 食事記録アプリの食品名・メニュー名が一覧表示されている画面
+- "summary": 1日の合計栄養数値（カロリー・PFC等）が表示されている画面
+- "meal_detail": 食品名・メニュー名が一覧表示されている画面
 - "food_photo": 実際の食事・料理・食品の写真
 - "unknown": その他
 
+必ず以下のJSON形式のみで返してください。JSON以外は一切出力しないでください：
+
 {
   "imageType": "summary" または "meal_detail" または "food_photo" または "unknown",
-  "totalCalories": <数値またはnull>,
-  "protein": <数値またはnull>,
-  "fat": <数値またはnull>,
-  "carbs": <数値またはnull>,
-  "fiber": <数値またはnull>,
-  "salt": <数値またはnull>,
+  "totalCalories": <画像から読み取った数値またはnull>,
+  "protein": <画像から読み取った数値またはnull>,
+  "fat": <画像から読み取った数値またはnull>,
+  "carbs": <画像から読み取った数値またはnull>,
+  "fiber": <画像から読み取った数値またはnull>,
+  "salt": <画像から読み取った数値またはnull>,
   "meals": {
     "breakfast": ["食品名1", "食品名2"],
     "lunch": ["食品名1"],
     "dinner": ["食品名1"],
     "snack": ["食品名1"]
   },
-  "estimatedCalories": <食事写真から推定したカロリー数値またはnull>,
+  "estimatedCalories": <食事写真から推定したカロリーまたはnull>,
   "estimatedFoods": ["推定食品1", "推定食品2"],
   "cookingMethods": ["調理法1", "調理法2"],
-  "rawText": "画像に写っているテキストをすべて書き起こした文字列",
+  "rawText": "画像に写っているテキストをすべて一字一句書き起こした文字列",
   "appName": "カロミル または あすけん または MyFitnessPal または 不明",
   "recordDate": "YYYY-MM-DD形式またはnull"
 }
 
-【重要ルール】
-- summaryの場合：栄養数値を正確に読み取る
-- meal_detailの場合：食品名を朝昼夜間食に分けて読み取る
-- food_photoの場合：
-  * 見えている料理・食品をすべてestimatedFoodsに列挙する
-  * 調理法（揚げ物・炒め物・蒸し物等）をcookingMethodsに記載
-  * カロリーを推定してestimatedCaloriesに記載
-  * 食事の時間帯が推定できればmealsに振り分ける
-- 単位はkcal・gに統一
-- 読み取れない項目はnullまたは空配列`;
+【重要】
+- rawTextには画像内の全テキストを漏れなく書き起こすこと
+- 数値は見えているものをそのまま使う（四捨五入・推測禁止）
+- 単位はkcal・gに統一（mg→g変換すること）
+- 読み取れない項目はnull、食品がない区分は空配列[]`;
 
 async function analyzeSingleImage(
   base64Image: string,
@@ -61,7 +74,7 @@ async function analyzeSingleImage(
 ): Promise<SingleImageResult> {
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
-    max_tokens: 1500,
+    max_tokens: 2000,
     messages: [
       { role: "system", content: VISION_SYSTEM_PROMPT },
       {
@@ -76,7 +89,7 @@ async function analyzeSingleImage(
           },
           {
             type: "text",
-            text: "この画像を解析してJSON形式で返してください。",
+            text: "この画像内のテキストと数値を一字一句正確に読み取り、JSON形式で返してください。数値は絶対に推測せず、見えているものだけを使ってください。",
           },
         ],
       },
