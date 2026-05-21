@@ -5,6 +5,8 @@ import {
   buildImageFeedbackPrompt,
   buildFoodPhotoFeedbackPrompt,
   buildNutrientTip,
+  buildDetailedNutritionPrompt,
+  calcTarget,
 } from "@/lib/prompts";
 import { checkDanger } from "@/lib/danger-check";
 import { supabase } from "@/lib/supabase";
@@ -232,6 +234,56 @@ export async function POST(req: NextRequest) {
           await replyToLine(
             replyToken,
             `あなたのLINEユーザーIDは：\n${lineUserId}\n\nこのIDをトレーナーにお伝えください！`
+          );
+          continue;
+        }
+
+        // 詳細栄養素リクエスト
+        if (
+          text.includes("詳しく") ||
+          text.includes("詳細") ||
+          text.includes("もっと教えて")
+        ) {
+          let client = await getClientByLineUserId(lineUserId);
+          if (!client) {
+            const clients = await getClients();
+            client = clients[0];
+          }
+
+          if (client) {
+            const { data: latestMeal } = await supabase
+              .from("meals")
+              .select("*")
+              .eq("client_id", client.id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .single();
+
+            if (latestMeal?.nutrition) {
+              const target = calcTarget(client);
+              const prompt = buildDetailedNutritionPrompt(
+                client,
+                latestMeal.nutrition,
+                target
+              );
+              const aiResponse = await openai.chat.completions.create({
+                model: "gpt-4o",
+                max_tokens: 1500,
+                messages: [
+                  { role: "system", content: prompt },
+                  { role: "user", content: "詳細な栄養素解説をお願いします。" },
+                ],
+                temperature: 0.7,
+              });
+              const detailReply = aiResponse.choices[0].message.content ?? "";
+              await replyToLine(replyToken, detailReply);
+              continue;
+            }
+          }
+
+          await replyToLine(
+            replyToken,
+            "まずは食事記録のスクリーンショットを送ってください📸"
           );
           continue;
         }
