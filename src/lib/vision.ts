@@ -54,7 +54,8 @@ const VISION_SYSTEM_PROMPT = `あなたは食事記録アプリのスクリー�
     "dinner": ["食品名1"],
     "snack": ["食品名1"]
   },
-  "estimatedCalories": <食事写真から推定したカロリーまたはnull>,
+  "estimatedCalories": <食事写真の場合は必ず各食品のカロリーを推定して合計値を数値で入れる。例：おにぎり200+アボカド160+味噌汁40=400なら400。絶対にnullにしない>,
+  "totalCalories": <food_photoの場合はestimatedCaloriesと同じ値を入れる。summaryの場合は画像から読み取った値>,
   "estimatedFoods": ["推定食品1", "推定食品2"],
   "cookingMethods": ["調理法1", "調理法2"],
   "rawText": "画像に写っているテキストをすべて一字一句書き起こした文字列",
@@ -66,7 +67,9 @@ const VISION_SYSTEM_PROMPT = `あなたは食事記録アプリのスクリー�
 - rawTextには画像内の全テキストを漏れなく書き起こすこと
 - 数値は見えているものをそのまま使う（四捨五入・推測禁止）
 - 単位はkcal・gに統一（mg→g変換すること）
-- 読み取れない項目はnull、食品がない区分は空配列[]`;
+-  読み取れない項目はnull、食品がない区分は空配列[]
+- food_photoの場合はestimatedCaloriesを必ず数値で返す（推定でOK、nullは禁止）
+- food_photoの場合はtotalCaloriesにもestimatedCaloriesと同じ値を入れる`;
 
 async function analyzeSingleImage(
   base64Image: string,
@@ -89,7 +92,13 @@ async function analyzeSingleImage(
           },
           {
             type: "text",
-            text: "この画像内のテキストと数値を一字一句正確に読み取り、JSON形式で返してください。数値は絶対に推測せず、見えているものだけを使ってください。",
+            text: `この画像を解析してJSON形式で返してください。
+食事・料理の写真の場合（food_photo）：
+・見えている食品を全て特定してください
+・各食品のカロリーを必ず推定してください（例：おにぎり1個=200kcal、アボカド半分=120kcal）
+・estimatedCaloriesに全食品の合計カロリーを数値で入れてください（nullは絶対禁止）
+・totalCaloriesにもestimatedCaloriesと同じ値を入れてください
+スクリーンショットの場合：数値は絶対に推測せず、見えているものだけを使ってください。`,
           },
         ],
       },
@@ -101,6 +110,7 @@ async function analyzeSingleImage(
 
   try {
     const parsed = JSON.parse(cleaned);
+    console.log("Vision parsed:", JSON.stringify({ imageType: parsed.imageType, totalCalories: parsed.totalCalories, estimatedCalories: parsed.estimatedCalories }));
     return {
       imageType: parsed.imageType ?? "unknown",
       estimatedFoods: parsed.estimatedFoods ?? [],
