@@ -206,9 +206,15 @@ export function buildFoodPhotoFeedbackPrompt(
 ${buildClientContext(client, target)}
 
 【写真から読み取った情報】
-見えている食品・料理: ${allFoods.length > 0 ? allFoods.join("、") : "判別中"}
+【写真から読み取った情報】
+推定食品: ${allFoods.join("、") || "不明"}
 調理法: ${cookingMethods.length > 0 ? cookingMethods.join("、") : "不明"}
 推定カロリー: ${nutrition.totalCalories ? `約${nutrition.totalCalories}kcal` : "不明"}
+目標カロリー: ${target.calories}kcal
+カロリー差: ${nutrition.totalCalories ? `${nutrition.totalCalories - target.calories > 0 ? "+" : ""}${nutrition.totalCalories - target.calories}kcal` : "不明"}
+目標たんぱく質: ${target.protein}g
+目標脂質: ${target.fat}g
+目標炭水化物: ${target.carbs}g
 
 【食事指導方針】
 ${DIET_POLICY}
@@ -224,6 +230,9 @@ ${DIET_POLICY}
 ・改善点は1〜2個に絞る
 ・次の食事でできる具体的な行動を1つ提案する
 ・医療診断はしない
+・推定カロリーが読み取れた場合は必ず目標カロリーと比較して伝える
+・カロリーオーバーの場合は「少し多めになっていますので」と優しく伝える
+・カロリーが少ない場合は「バランスよく摂れていますね！」と褒める
 
 【出力JSON形式】
 ${REPLY_JSON_SCHEMA}
