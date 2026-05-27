@@ -1,7 +1,6 @@
 import { Client, NutritionData, NutritionEvaluation, NutritionTarget } from "@/types";
 
 export function calcTarget(client: Client): NutritionTarget {
-  // トレーナーが設定した値を優先
   if (
     (client as any).targetCalories &&
     (client as any).targetProtein &&
@@ -16,7 +15,6 @@ export function calcTarget(client: Client): NutritionTarget {
     };
   }
 
-  // 設定がない場合は自動計算
   const bmr =
     client.gender === "male"
       ? 13.397 * client.weight + 4.799 * client.height - 5.677 * client.age + 88.362
@@ -39,16 +37,22 @@ export function calcTarget(client: Client): NutritionTarget {
 }
 
 function goalLabel(g: Client["goal"]) {
-  return { fat_loss: "減量", muscle_gain: "筋肉増量", maintain: "現状維持", health: "健康増進" }[g];
+  const map: Record<Client["goal"], string> = {
+    fat_loss: "減量", muscle_gain: "筋肉増量", maintain: "現状維持", health: "健康増進"
+  };
+  return map[g];
 }
+
 function activityLabel(l: Client["activityLevel"]) {
-  return {
+  const map: Record<Client["activityLevel"], string> = {
     sedentary: "ほぼ運動なし", light: "軽い運動", moderate: "中程度",
     active: "活発", very_active: "非常に活発",
-  }[l];
+  };
+  return map[l];
 }
+
 function statusLabel(s: string) {
-  return { low: "少なめ", ok: "良好", high: "多め", unknown: "不明" }[s] ?? "不明";
+  return ({ low: "少なめ", ok: "良好", high: "多め", unknown: "不明" } as Record<string, string>)[s] ?? "不明";
 }
 
 function buildClientContext(client: Client, target: NutritionTarget): string {
@@ -78,25 +82,35 @@ const REPLY_JSON_SCHEMA = `{
 const TRAINER_STYLE = `
 【返信文体の参考例】
 ---
-【出来ていること】
-もやしなどはとてもカロリーも低く、噛み応えもございますので積極的に活用していきましょう！
+【出来ていること】✨
+本日の鶏むね肉は素晴らしい選択でございますね！
+鶏むね肉に含まれる必須アミノ酸（ロイシン・バリン・イソロイシン）は
+筋肉の合成を促進し、運動後の回復を助ける効果がございます！
+積極的に取り入れていきましょう！
 
-【目的と目標を達成するために改善が必要なこと】
-プロテインドリンクとは別にもし可能であれば固形物でのタンパク質摂取もチャレンジしていきたいです！
-1日の中での消費カロリーについてなのですが食事を消化して吸収していくのにもカロリーが使用されます！
-こちらが固形物の食べ物がよりカロリーが消費されやすいです！
-ただプロテインがダメというわけではございませんのでできる範囲で少しづつチャレンジしてみましょう！
+【目的と目標を達成するために改善が必要なこと】💪
+今日の揚げ物に含まれる飽和脂肪酸は、摂りすぎると
+体脂肪として蓄積されやすく血中コレステロールを上昇させる
+可能性がございます。週2〜3回程度に抑えていきましょう！
+
+【リカバリー方法】
+次の食事で食物繊維（ブロッコリー・きのこ・海藻）を
+多めに摂ると余分な脂質の排出を助けます！
+水分をしっかり摂ることで代謝促進にもなりますよ！
 ---
 
 【文体のルール】
 ・「〜でございますね！」「〜ましょう！」など丁寧だけど明るいトーン
 ・必ず【出来ていること】を先に書く
-・【目的と目標を達成するために改善が必要なこと】は1〜2個に絞る
-・具体的な食品名を挙げて説明する
-・「〜はダメ」ではなく「〜というわけではございません」など否定しない
-・理由を丁寧にわかりやすく説明する
-・改善提案は「〜しましょう！」「〜チャレンジしてみましょう！」など前向きに締める
-・絵文字は使わない
+・食材・料理名を具体的に挙げる
+・その食材に含まれる栄養素名を必ず入れる
+・その栄養素が体にもたらす具体的な作用を説明する
+・摂りすぎた場合の体への影響を具体的に説明する
+・必ず【リカバリー方法】を入れる
+・改善点は1〜2個に絞る
+・「〜はダメ」ではなく「〜を整えていきましょう」など前向きな表現
+・絵文字を2〜3個使う（✨💪🥗など）
+・文末は「！」で終わる
 ・医療診断はしない`;
 
 export function buildSystemPrompt(client: Client): string {
@@ -117,11 +131,14 @@ ${TRAINER_STYLE}
 ${REPLY_JSON_SCHEMA}
 
 replyの中身は以下の構成にしてください：
-【出来ていること】
-（良かった点を具体的に）
+【出来ていること】✨
+（食材名・含まれる栄養素名・その栄養素が体にもたらす具体的な作用を説明する）
 
-【目的と目標を達成するために改善が必要なこと】
-（改善点を1〜2個、理由とともに優しく）`;
+【目的と目標を達成するために改善が必要なこと】💪
+（改善が必要な食材名・含まれる成分・摂りすぎた場合の体への具体的な影響を説明する）
+
+【リカバリー方法】
+（次の食事・翌日でできる具体的な行動を1〜2個。食物繊維・水分・代替食品など）`;
 }
 
 export function buildImageFeedbackPrompt(
@@ -131,10 +148,10 @@ export function buildImageFeedbackPrompt(
   target: NutritionTarget
 ): string {
   const allFoods = [
-    ...nutrition.meals.breakfast.map((f) => `朝：${f}`),
-    ...nutrition.meals.lunch.map((f) => `昼：${f}`),
-    ...nutrition.meals.dinner.map((f) => `夜：${f}`),
-    ...nutrition.meals.snack.map((f) => `間食：${f}`),
+    ...nutrition.meals.breakfast.map((f: string) => `朝：${f}`),
+    ...nutrition.meals.lunch.map((f: string) => `昼：${f}`),
+    ...nutrition.meals.dinner.map((f: string) => `夜：${f}`),
+    ...nutrition.meals.snack.map((f: string) => `間食：${f}`),
   ];
   const fmt = (v: number | null, u: string) => v !== null ? `${v}${u}` : "不明";
   const diff = (v: number | null, t: number) =>
@@ -170,8 +187,11 @@ ${TRAINER_STYLE}
 【画像返信追加ルール】
 ・最初に「スクリーンショットありがとうございます！」から始める
 ・数値が読み取れた場合は具体的な数字を使って褒める
-・脂質が多い場合は原因食品を優しく伝える（「悪い」ではなく「摂りすぎを整える」表現）
+・食材に含まれる栄養素名と体への具体的な作用を説明する
+・摂りすぎた栄養素がどんな影響を体に与えるか具体的に説明する
+・脂質が多い場合は原因食品を優しく伝える
 ・たんぱく質不足なら次の食事で足せる具体的な食品を提案する
+・必ず【リカバリー方法】セクションを入れる
 ・医療診断はしない
 
 【出力JSON形式】
@@ -179,12 +199,16 @@ ${TRAINER_STYLE}
 ${REPLY_JSON_SCHEMA}
 
 replyの中身は以下の構成にしてください：
-【出来ていること】
-（良かった点を具体的に）
+【出来ていること】✨
+（食材名・含まれる栄養素名・その栄養素が体にもたらす具体的な作用を説明する）
 
-【目的と目標を達成するために改善が必要なこと】
-（改善点を1〜2個、理由とともに優しく）`;
+【目的と目標を達成するために改善が必要なこと】💪
+（改善が必要な食材名・含まれる成分・摂りすぎた場合の体への具体的な影響を説明する）
+
+【リカバリー方法】
+（次の食事・翌日でできる具体的な行動を1〜2個。食物繊維・水分・代替食品など）`;
 }
+
 export function buildFoodPhotoFeedbackPrompt(
   client: Client,
   nutrition: NutritionData,
@@ -206,7 +230,6 @@ export function buildFoodPhotoFeedbackPrompt(
 ${buildClientContext(client, target)}
 
 【写真から読み取った情報】
-【写真から読み取った情報】
 推定食品: ${allFoods.join("、") || "不明"}
 調理法: ${cookingMethods.length > 0 ? cookingMethods.join("、") : "不明"}
 推定カロリー: ${nutrition.totalCalories ? `約${nutrition.totalCalories}kcal` : "不明"}
@@ -219,33 +242,32 @@ ${buildClientContext(client, target)}
 【食事指導方針】
 ${DIET_POLICY}
 
-【文体ルール】
+${TRAINER_STYLE}
+
+【写真返信追加ルール】
 ・「お写真ありがとうございます！」から始める
-・写真に写っている具体的な食品名・料理名を必ず使って褒める（「○○が入っていて素晴らしいですね！」など）
-・数値が不明な場合は「写真から見る限り」「○○が見えますので」などの表現を使う
-・揚げ物・炒め物など脂質が多そうな調理法がある場合は「○○は少し脂質が多めになりやすいので」と優しく伝える
-・「〜でございますね！」「〜ましょう！」など丁寧だけど明るいトーン
-・絵文字を2〜3個使う（🥗🍳💪など食事・健康に関連するもの）
-・文末は「！」で終わる（読点「、」や句点「。」で終わらない）
-・改善点は1〜2個に絞る
-・次の食事でできる具体的な行動を1つ提案する
-・医療診断はしない
+・写真に写っている具体的な食品名・料理名を必ず使って褒める
+・食材に含まれる栄養素名と体への具体的な作用を説明する
+・摂りすぎた場合の体への影響を具体的に説明する
+・揚げ物など脂質が多そうな調理法がある場合は優しく伝える
+・必ず【リカバリー方法】セクションを入れる
 ・推定カロリーが読み取れた場合は必ず目標カロリーと比較して伝える
-・カロリーオーバーの場合は「少し多めになっていますので」と優しく伝える
-・カロリーが少ない場合は「バランスよく摂れていますね！」と褒める
+・医療診断はしない
 
 【出力JSON形式】
 ${REPLY_JSON_SCHEMA}
 
 replyの中身は必ずこの構成にしてください：
-【出来ていること】
-（写真に写っている具体的な食品を名指しして褒める）
+【出来ていること】✨
+（食材名・含まれる栄養素名・その栄養素が体にもたらす具体的な作用を説明する）
 
-【目的と目標を達成するために改善が必要なこと】
-（改善点を1〜2個、理由とともに優しく。文末は「！」で終わる）`;
+【目的と目標を達成するために改善が必要なこと】💪
+（改善が必要な食材名・含まれる成分・摂りすぎた場合の体への具体的な影響を説明する）
+
+【リカバリー方法】
+（次の食事・翌日でできる具体的な行動を1〜2個。食物繊維・水分・代替食品など）`;
 }
 
-// 毎回の返信に追加する「今日のおすすめ栄養素」
 export function buildNutrientTip(nutrition: NutritionData, client: Client): string {
   const tips = [
     {
@@ -266,11 +288,9 @@ export function buildNutrientTip(nutrition: NutritionData, client: Client): stri
     },
   ];
 
-  // 条件に合うtipを選ぶ（なければデフォルト）
   const matched = tips.find((t) => t.condition(nutrition));
   if (matched) return matched.tip;
 
-  // デフォルトtip
   const defaultTips = [
     "💡 今日のワンポイント｜ビタミンD\nビタミンDは骨を強くして免疫力を高めます！鮭・きのこ・卵黄に含まれています。日光浴でも生成されますよ！",
     "💡 今日のワンポイント｜マグネシウム\nマグネシウムは300以上の体内反応に関わる超重要ミネラルです！ナッツ・豆類・バナナに豊富です！",
@@ -281,7 +301,6 @@ export function buildNutrientTip(nutrition: NutritionData, client: Client): stri
   return defaultTips[idx];
 }
 
-// 詳細栄養素解説プロンプト
 export function buildDetailedNutritionPrompt(
   client: Client,
   nutrition: NutritionData,
@@ -347,7 +366,6 @@ ${client.medicalHistory || "特記なし"}
 まとめ：〜`;
 }
 
-// 初回オンボーディングの質問
 export function getOnboardingMessage(step: string, name?: string): string {
   const messages: Record<string, string> = {
     start: `はじめまして！GymAI食事指導システムへようこそ🎉\n\nより精度の高い食事アドバイスのために、いくつか教えてください！\n\nまずお名前を教えてください😊`,
@@ -364,7 +382,6 @@ export function getOnboardingMessage(step: string, name?: string): string {
   return messages[step] ?? messages.start;
 }
 
-// 食事相談プロンプト
 export function buildConsultationPrompt(client: Client, target: NutritionTarget): string {
   return `あなたはパーソナルジムの食事指導トレーナーAIです。
 お客様からの食事に関する相談に答えてください。
