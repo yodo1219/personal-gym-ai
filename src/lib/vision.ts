@@ -244,7 +244,8 @@ export function calcNutritionTarget(client: Client): NutritionTarget {
 
 export function evaluateNutrition(
   data: NutritionData,
-  target: NutritionTarget
+  target: NutritionTarget,
+  recentFoods: string[] = []
 ): NutritionEvaluation {
   function status(
     actual: number | null, targetVal: number,
@@ -277,12 +278,39 @@ export function evaluateNutrition(
   const proteinStatus = status(data.protein, target.protein);
   const lowProteinSuggestions: string[] = [];
   if (proteinStatus === "low") {
+    const allSuggestions = [
+      { food: "サラダチキン", detail: "1パックで約20g", keywords: ["サラダチキン", "チキン"] },
+      { food: "ギリシャヨーグルト", detail: "1個で約10g", keywords: ["ヨーグルト"] },
+      { food: "ゆで卵", detail: "1個で約6g", keywords: ["卵", "ゆで卵", "たまご"] },
+      { food: "木綿豆腐", detail: "半丁で約10g", keywords: ["豆腐"] },
+      { food: "納豆", detail: "1パックで約8g", keywords: ["納豆"] },
+      { food: "ツナ缶", detail: "1缶で約15g", keywords: ["ツナ", "まぐろ"] },
+      { food: "魚肉ソーセージ", detail: "1本で約7g", keywords: ["魚肉ソーセージ"] },
+      { food: "枝豆", detail: "100gで約11g", keywords: ["枝豆"] },
+      { food: "鮭フレーク", detail: "大さじ2で約8g", keywords: ["鮭", "さけ"] },
+      { food: "するめ・さきいか", detail: "1袋で約15g", keywords: ["するめ", "さきいか", "いか"] },
+      { food: "プロテインバー", detail: "1本で約20g", keywords: ["プロテイン"] },
+      { food: "しらす", detail: "大さじ3で約6g", keywords: ["しらす"] },
+      { food: "鶏むね肉", detail: "100gで約24g", keywords: ["鶏むね", "むね肉"] },
+      { food: "ちくわ", detail: "2本で約6g", keywords: ["ちくわ"] },
+      { food: "カッテージチーズ", detail: "100gで約12g", keywords: ["チーズ", "カッテージ"] },
+    ];
+
+    // 直近で食べているものを除外
+    const notRecentlyEaten = allSuggestions.filter((s) =>
+      !s.keywords.some((kw) =>
+        recentFoods.some((f) => f.includes(kw))
+      )
+    );
+
+    // 食べていないものを優先、なければ全体からランダム
+    const pool = notRecentlyEaten.length >= 3 ? notRecentlyEaten : allSuggestions;
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
     lowProteinSuggestions.push(
-      "サラダチキン（1パックで約20g）",
-      "ギリシャヨーグルト（1個で約10g）",
-      "ゆで卵（1個で約6g）"
+      ...shuffled.slice(0, 3).map((s) => `${s.food}（${s.detail}）`)
     );
   }
+  
 
   return {
     calorieStatus: status(data.totalCalories, target.calories),

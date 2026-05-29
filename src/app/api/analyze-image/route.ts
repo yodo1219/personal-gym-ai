@@ -4,6 +4,7 @@ import { checkDanger } from "@/lib/danger-check";
 import { getClient } from "@/lib/storage";
 import { buildImageFeedbackPrompt } from "@/lib/prompts";
 import OpenAI from "openai";
+import { supabase } from "@/lib/supabase";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -27,7 +28,26 @@ export async function POST(req: NextRequest) {
 
     const nutrition = await analyzeMultipleImages(images);
     const target = calcNutritionTarget(client);
-    const evaluation = evaluateNutrition(nutrition, target);
+    // 直近の食事履歴を取得
+const { data: recentMeals } = await supabase
+.from("meals")
+.select("nutrition")
+.eq("client_id", client.id)
+.order("created_at", { ascending: false })
+.limit(7);
+
+const recentFoods = (recentMeals ?? []).flatMap((m: any) => {
+const n = m.nutrition;
+if (!n) return [];
+return [
+  ...(n.meals?.breakfast ?? []),
+  ...(n.meals?.lunch ?? []),
+  ...(n.meals?.dinner ?? []),
+  ...(n.meals?.snack ?? []),
+];
+});
+
+const evaluation = evaluateNutrition(nutrition, target, recentFoods);
     const dangerCheck = checkDanger(nutrition.rawText);
 
     if (dangerCheck.level === "danger") {

@@ -120,7 +120,26 @@ async function analyzeAndReply(lineUserId: string) {
     meals: nutrition.meals,
   }));
   const target = calcTarget(client);
-  const evaluation = evaluateNutrition(nutrition, target);
+  // 直近の食事履歴を取得
+const { data: recentMeals } = await supabase
+.from("meals")
+.select("nutrition")
+.eq("client_id", client.id)
+.order("created_at", { ascending: false })
+.limit(7);
+
+const recentFoods = (recentMeals ?? []).flatMap((m: any) => {
+const n = m.nutrition;
+if (!n) return [];
+return [
+  ...(n.meals?.breakfast ?? []),
+  ...(n.meals?.lunch ?? []),
+  ...(n.meals?.dinner ?? []),
+  ...(n.meals?.snack ?? []),
+];
+});
+
+const evaluation = evaluateNutrition(nutrition, target, recentFoods);
   const dangerCheck = checkDanger(nutrition.rawText);
 
   let aiReply = "";
