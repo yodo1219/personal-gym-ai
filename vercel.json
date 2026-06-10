@@ -4,5 +4,11 @@
     "src/app/api/**": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/daily-message",
+      "schedule": "0 1 * * *"
+    }
+  ]
 }
