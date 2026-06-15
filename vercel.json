@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/daily-message",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-food-suggestion",
+      "schedule": "0 1 * * 1"
     }
   ]
 }
