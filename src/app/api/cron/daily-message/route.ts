@@ -5,7 +5,7 @@ const MESSAGES = [
   "💧 今日はお水しっかり飲めていますか？\n水分補給は代謝アップと脂肪燃焼に欠かせません！目安は1日1.5〜2Lですよ！",
   "🥦 今日の食事に野菜は入っていますか？\n野菜に含まれる食物繊維が腸内環境を整えて、栄養の吸収をアップしてくれます！",
   "🌙 良い睡眠は取れていますか？\n睡眠中に成長ホルモンが分泌されて、筋肉の回復や脂肪燃焼が促進されます！7〜8時間を目標に！",
-  "🍳 今日のたんぱく質は摂れていますか？\n毎食手のひら1枚分のたんぱく質を意識してみてください！筋肉維持に大切です💪",
+  "🍳 今日のたんぱく質は摂れていますか？\n毎食手のひら1枚分のたんぱく質を意識してみてください！筋肉維持に大切です��",
   "🌿 今日の食事でオメガ3は摂れましたか？\nサーモン・サバ・アマニ油など良い脂質を意識すると体の炎症が抑えられますよ！",
   "☀️ 今日も一日お疲れ様です！\n食事の写真やスクリーンショットをいつでも送ってくださいね📸 一緒に目標に近づきましょう！",
   "🍌 今日は間食しましたか？\n間食するならバナナ・ナッツ・ゆで卵がおすすめです！血糖値の急上昇を防げますよ！",
@@ -34,7 +34,26 @@ export async function GET(req: NextRequest) {
 
   try {
     const clients = await getClients();
-    const lineClients = clients.filter((c: any) => c.lineUserId);
+    const now = new Date();
+    const currentHour = now.getUTCHours();
+    const currentDay = now.getUTCDay();
+
+    const lineClients = clients.filter((c: any) => {
+      if (!c.lineUserId) return false;
+      if (c.messageEnabled === false) return false;
+
+      // 時間チェック（UTC）
+      const targetHour = c.messageHour ?? 1;
+      if (targetHour !== currentHour) return false;
+
+      // 頻度チェック
+      const freq = c.messageFrequency ?? "daily";
+      if (freq === "daily") return true;
+      if (freq === "weekdays") return currentDay >= 1 && currentDay <= 5;
+      if (freq === "three_times") return [1, 3, 5].includes(currentDay);
+      if (freq === "weekly") return currentDay === 1;
+      return true;
+    });
 
     const message = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
 
@@ -45,11 +64,7 @@ export async function GET(req: NextRequest) {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      sentCount,
-      message: message.slice(0, 30) + "...",
-    });
+    return NextResponse.json({ success: true, sentCount });
   } catch (error) {
     console.error("cron error:", error);
     return NextResponse.json({ error: "Failed" }, { status: 500 });

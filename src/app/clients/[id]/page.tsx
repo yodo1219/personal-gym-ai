@@ -299,6 +299,45 @@ export default function ClientDetailPage() {
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                     </div>
                   ))}
+                  ))}
+                <div className="space-y-3 mt-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">メッセージ送信時間</label>
+                    <select value={form.messageHour ?? 1}
+                      onChange={(e) => set("messageHour", e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
+                      <option value={0}>朝9時</option>
+                      <option value={1}>朝10時</option>
+                      <option value={2}>朝11時</option>
+                      <option value={3}>昼12時</option>
+                      <option value={4}>午後13時</option>
+                      <option value={5}>午後14時</option>
+                      <option value={6}>午後15時</option>
+                      <option value={7}>夕方18時</option>
+                      <option value={8}>夜20時</option>
+                      <option value={9}>夜21時</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">送信頻度</label>
+                    <select value={form.messageFrequency ?? "daily"}
+                      onChange={(e) => set("messageFrequency", e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
+                      <option value="daily">毎日</option>
+                      <option value="weekdays">平日のみ</option>
+                      <option value="three_times">週3回（月水金）</option>
+                      <option value="weekly">週1回（月曜）</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox"
+                      checked={form.messageEnabled ?? true}
+                      onChange={(e) => set("messageEnabled", e.target.checked)}
+                      className="w-4 h-4" />
+                    <label className="text-sm font-medium text-gray-700">自動メッセージを送信する</label>
+                  </div>
+                </div>
+              ) : (
                 </div>
               ) : (
                 <div className="space-y-2">
