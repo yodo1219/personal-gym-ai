@@ -299,7 +299,6 @@ export default function ClientDetailPage() {
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                     </div>
                   ))}
-                  ))}
                 <div className="space-y-3 mt-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">メッセージ送信時間</label>
