@@ -331,7 +331,7 @@ export default function ClientDetailPage() {
                   <div className="flex items-center gap-2">
                     <input type="checkbox"
                       checked={form.messageEnabled ?? true}
-                      onChange={(e) => set("messageEnabled", e.target.checked)}
+                      onChange={(e) => setForm((prev: any) => ({ ...prev, messageEnabled: e.target.checked }))}
                       className="w-4 h-4" />
                     <label className="text-sm font-medium text-gray-700">自動メッセージを送信する</label>
                   </div>
