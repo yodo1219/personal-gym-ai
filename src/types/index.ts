@@ -21,6 +21,9 @@ export interface Client {
   bingeTendency: string;
   sleepStatus: string;
   lineUserId?: string;
+  messageHour?: number;
+  messageFrequency?: string;
+  messageEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
   targetCalories?: number;
