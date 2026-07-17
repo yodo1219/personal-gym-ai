@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       if (c.messageEnabled === false) return false;
 
       // 時間チェック（UTC）
-      const targetHour = c.messageHour ?? 1;
+      const currentHour = (now.getUTCHours() + 9) % 24;
       if (targetHour !== currentHour) return false;
 
       // 頻度チェック
