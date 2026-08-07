@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
 
       // 時間チェック（UTC）
       const currentHour = (now.getUTCHours() + 9) % 24;
+      const targetHour = c.messageHour ?? 1;
       if (targetHour !== currentHour) return false;
 
       // 頻度チェック
