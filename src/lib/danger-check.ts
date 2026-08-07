@@ -11,7 +11,7 @@ const DANGER_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /食べられない|食欲がない|食欲なし/i, reason: "食欲不振・摂食障害傾向" },
   { pattern: /めまい|立ちくらみ|ふらふら/i, reason: "低血糖・体調不良の疑い" },
   { pattern: /妊娠|つわり|妊婦/i, reason: "妊娠の可能性（要確認）" },
-  { pattern: /薬|服薬|処方|インスリン/i, reason: "服薬中の可能性" },
+  { pattern: /服薬中|処方薬|インスリン注射|投薬中/i, reason: "服薬中の可能性" },
   { pattern: /糖尿|高血圧|心臓|腎臓|肝臓/i, reason: "疾患の可能性" },
   { pattern: /気持ち悪|体調不良|倒れ/i, reason: "著しい体調不良の訴え" },
   { pattern: /死にたい|消えたい|つらい/i, reason: "メンタル面の危機サイン" },
