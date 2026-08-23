@@ -125,12 +125,12 @@ async function analyzeAndReplyExpense(lineUserId: string) {
   }
 }
 
-async function analyzeAndReplyIncome(lineUserId: string, text: string, replyToken: string) {
+async function analyzeAndReplyIncome(lineUserId: string, text: string) {
   const displayName = await getLineDisplayName(lineUserId);
   const receiptUser = await getOrCreateReceiptUser(lineUserId, displayName);
 
   if (!receiptUser) {
-    await replyToLine(replyToken, "アカウント情報の取得に失敗しました。もう一度お試しください。");
+    await pushMessage(lineUserId, "アカウント情報の取得に失敗しました。もう一度お試しください。");
     return;
   }
 
@@ -160,11 +160,11 @@ async function analyzeAndReplyIncome(lineUserId: string, text: string, replyToke
       .map((e) => `・${e.description || "内容不明"} ${e.creditAmount}円`)
       .join("\n");
 
-    await replyToLine(replyToken, `${journalEntries.length}件記帳しました💰（収入）\n\n${summary}`);
+    await pushMessage(lineUserId, `${journalEntries.length}件記帳しました💰（収入）\n\n${summary}`);
   } catch (e) {
     console.error("収入解析エラー:", e);
-    await replyToLine(
-      replyToken,
+    await pushMessage(
+      lineUserId,
       "申し訳ありません、解析に失敗しました。「売上 金額 内容」の形式でもう一度送ってください。\n例：売上 250000円 6月分セッション料"
     );
   }
@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
 
         if (text.startsWith("売上") || text.startsWith("収入")) {
           await replyToLine(replyToken, "売上を記帳しています💰\n少々お待ちください！");
-          await analyzeAndReplyIncome(lineUserId, text, replyToken);
+          await analyzeAndReplyIncome(lineUserId, text);
           continue;
         }
 
