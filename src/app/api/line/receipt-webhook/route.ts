@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateReceiptUser } from "@/lib/receipts/users";
 import { analyzeReceiptImages } from "@/lib/receipts/analyzeReceiptImages";
+import { analyzeIncomeText } from "@/lib/receipts/analyzeIncomeText";
 import { supabase } from "@/lib/supabase";
 
 const RECEIPT_LINE_CHANNEL_ACCESS_TOKEN =
@@ -13,10 +14,7 @@ async function pushMessage(to: string, text: string) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${RECEIPT_LINE_CHANNEL_ACCESS_TOKEN}`,
     },
-    body: JSON.stringify({
-      to,
-      messages: [{ type: "text", text }],
-    }),
+    body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
   });
 }
 
@@ -27,21 +25,14 @@ async function replyToLine(replyToken: string, text: string) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${RECEIPT_LINE_CHANNEL_ACCESS_TOKEN}`,
     },
-    body: JSON.stringify({
-      replyToken,
-      messages: [{ type: "text", text }],
-    }),
+    body: JSON.stringify({ replyToken, messages: [{ type: "text", text }] }),
   });
 }
 
 async function downloadImage(messageId: string): Promise<string> {
   const res = await fetch(
     `https://api-data.line.me/v2/bot/message/${messageId}/content`,
-    {
-      headers: {
-        Authorization: `Bearer ${RECEIPT_LINE_CHANNEL_ACCESS_TOKEN}`,
-      },
-    }
+    { headers: { Authorization: `Bearer ${RECEIPT_LINE_CHANNEL_ACCESS_TOKEN}` } }
   );
   const buffer = await res.arrayBuffer();
   return Buffer.from(buffer).toString("base64");
@@ -59,11 +50,7 @@ async function getLineDisplayName(lineUserId: string): Promise<string> {
   }
 }
 
-/**
- * 溜まっている「pending」状態のレシート画像をまとめて解析し、
- * receipts テーブルに記帳、結果をLINEに返信する。
- */
-async function analyzeAndReply(lineUserId: string) {
+async function analyzeAndReplyExpense(lineUserId: string) {
   const { data: pendingImages } = await supabase
     .from("receipt_line_images")
     .select("*")
@@ -96,10 +83,10 @@ async function analyzeAndReply(lineUserId: string) {
   try {
     const journalEntries = await analyzeReceiptImages(images);
 
-    // receipt_user_id で receipts テーブルに記帳
     const { error } = await supabase.from("receipts").insert(
       journalEntries.map((entry) => ({
         receipt_user_id: receiptUser.id,
+        entry_type: "expense",
         debit_account: entry.debitAccount,
         debit_amount: entry.debitAmount,
         credit_account: entry.creditAccount,
@@ -127,13 +114,58 @@ async function analyzeAndReply(lineUserId: string) {
 
     await pushMessage(
       lineUserId,
-      `${journalEntries.length}件記帳しました📝\n\n${summary}\n\n記帳データはCSVでいつでもダウンロードできます。`
+      `${journalEntries.length}件記帳しました📝（支出）\n\n${summary}`
     );
   } catch (e) {
     console.error("レシート解析エラー:", e);
     await pushMessage(
       lineUserId,
       "申し訳ありません、解析に失敗しました。画像を撮り直してもう一度送ってください。"
+    );
+  }
+}
+
+async function analyzeAndReplyIncome(lineUserId: string, text: string, replyToken: string) {
+  const displayName = await getLineDisplayName(lineUserId);
+  const receiptUser = await getOrCreateReceiptUser(lineUserId, displayName);
+
+  if (!receiptUser) {
+    await replyToLine(replyToken, "アカウント情報の取得に失敗しました。もう一度お試しください。");
+    return;
+  }
+
+  try {
+    const journalEntries = await analyzeIncomeText(text);
+
+    const { error } = await supabase.from("receipts").insert(
+      journalEntries.map((entry) => ({
+        receipt_user_id: receiptUser.id,
+        entry_type: "income",
+        debit_account: entry.debitAccount,
+        debit_amount: entry.debitAmount,
+        credit_account: entry.creditAccount,
+        credit_amount: entry.creditAmount,
+        date: entry.date,
+        description: entry.description,
+        store_name: entry.storeName,
+        tax_category: entry.taxCategory,
+        tax_rate: entry.taxRate,
+        sub_account: entry.subAccount,
+      }))
+    );
+
+    if (error) throw error;
+
+    const summary = journalEntries
+      .map((e) => `・${e.description || "内容不明"} ${e.creditAmount}円`)
+      .join("\n");
+
+    await replyToLine(replyToken, `${journalEntries.length}件記帳しました💰（収入）\n\n${summary}`);
+  } catch (e) {
+    console.error("収入解析エラー:", e);
+    await replyToLine(
+      replyToken,
+      "申し訳ありません、解析に失敗しました。「売上 金額 内容」の形式でもう一度送ってください。\n例：売上 250000円 6月分セッション料"
     );
   }
 }
@@ -157,6 +189,12 @@ export async function POST(req: NextRequest) {
       if (event.message.type === "text") {
         const text = event.message.text.trim();
 
+        if (text.startsWith("売上") || text.startsWith("収入")) {
+          await replyToLine(replyToken, "売上を記帳しています💰\n少々お待ちください！");
+          await analyzeAndReplyIncome(lineUserId, text, replyToken);
+          continue;
+        }
+
         if (
           text.includes("送信完了") ||
           text.includes("完了") ||
@@ -168,7 +206,7 @@ export async function POST(req: NextRequest) {
             replyToken,
             "ありがとうございます！まとめて記帳しています🧾\n少々お待ちください！"
           );
-          await analyzeAndReply(lineUserId);
+          await analyzeAndReplyExpense(lineUserId);
           continue;
         }
 
@@ -177,22 +215,21 @@ export async function POST(req: NextRequest) {
           text.includes("マイID") ||
           text.includes("ID教えて")
         ) {
-          await replyToLine(
-            replyToken,
-            `あなたのLINEユーザーIDは：\n${lineUserId}`
-          );
+          await replyToLine(replyToken, `あなたのLINEユーザーIDは：\n${lineUserId}`);
           continue;
         }
 
         await replyToLine(
           replyToken,
-          "レシートの写真を送ってください🧾\n全部送り終わったら「完了」と送ってください！"
+          "レシートの写真を送ってください🧾（経費として記帳）\n" +
+            "全部送り終わったら「完了」と送ってください！\n\n" +
+            "売上を記帳したい時は「売上 金額 内容」の形式で送ってください💰\n" +
+            "例：売上 250000円 6月分セッション料"
         );
         continue;
       }
 
       if (event.message.type === "image") {
-        // 初回メッセージの場合、先にアカウントを作っておく
         await getOrCreateReceiptUser(lineUserId);
 
         await supabase.from("receipt_line_images").insert({
@@ -203,7 +240,7 @@ export async function POST(req: NextRequest) {
 
         const { count } = await supabase
           .from("receipt_line_images")
-          .select("*", { count: "exact" })
+          .select("*", { count: "exact", head: true })
           .eq("line_user_id", lineUserId)
           .eq("status", "pending");
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
 // GET /api/receipts/export?lineUserId=xxxx
-// そのユーザーの記帳データを弥生会計インポート形式のCSVとして返す。
+// そのユーザーの記帳データ（収入・支出とも）を弥生会計インポート形式のCSVとして返す。
 export async function GET(req: NextRequest) {
   const lineUserId = req.nextUrl.searchParams.get("lineUserId");
 
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
   }
 
   const headers = [
+    "区分",
     "取引日",
     "借方勘定科目",
     "借方補助科目",
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
   ];
 
   const rows = (entries ?? []).map((e) => [
+    e.entry_type === "income" ? "収入" : "支出",
     e.date ?? "",
     e.debit_account ?? "",
     e.sub_account ?? "",
