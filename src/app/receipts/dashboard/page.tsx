@@ -59,7 +59,7 @@ export default function ReceiptsDashboard() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/receipts/list?lineUserId=${encodeURIComponent(id)}`);
+      const res = await fetch("/api/receipts/list?lineUserId=" + encodeURIComponent(id));
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         if (res.status === 404) {
@@ -115,8 +115,8 @@ export default function ReceiptsDashboard() {
 
   function formatYm(ym: string) {
     if (ym === "不明") return ym;
-    const [y, m] = ym.split("-");
-    return `${y}年${Number(m)}月`;
+    const parts = ym.split("-");
+    return parts[0] + "年" + Number(parts[1]) + "月";
   }
 
   if (loading) {
@@ -136,6 +136,10 @@ export default function ReceiptsDashboard() {
       </div>
     );
   }
+
+  const exportHref = lineUserId
+    ? "/api/receipts/export?lineUserId=" + encodeURIComponent(lineUserId)
+    : "";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -162,7 +166,7 @@ export default function ReceiptsDashboard() {
               </div>
               <div className="bg-white border border-gray-200 rounded-xl p-4">
                 <p className="text-xs text-gray-400 mb-1">利益</p>
-                <p className={`text-lg font-bold ${yearTotal.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                <p className={"text-lg font-bold " + (yearTotal.profit >= 0 ? "text-green-600" : "text-red-600")}>
                   ¥{yearTotal.profit.toLocaleString()}
                 </p>
               </div>
@@ -173,11 +177,12 @@ export default function ReceiptsDashboard() {
                 <button
                   key={g.yearMonth}
                   onClick={() => setActiveMonth(g.yearMonth)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    activeMonth === g.yearMonth
+                  className={
+                    "shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors " +
+                    (activeMonth === g.yearMonth
                       ? "bg-blue-600 text-white"
-                      : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
-                  }`}
+                      : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100")
+                  }
                 >
                   {formatYm(g.yearMonth)}
                 </button>
@@ -198,11 +203,12 @@ export default function ReceiptsDashboard() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`text-xs px-2 py-0.5 rounded-full ${
-                              e.entry_type === "income"
+                            className={
+                              "text-xs px-2 py-0.5 rounded-full " +
+                              (e.entry_type === "income"
                                 ? "bg-blue-50 text-blue-600"
-                                : "bg-gray-100 text-gray-600"
-                            }`}
+                                : "bg-gray-100 text-gray-600")
+                            }
                           >
                             {e.entry_type === "income" ? "収入" : "支出"}
                           </span>
@@ -213,9 +219,10 @@ export default function ReceiptsDashboard() {
                         <p className="text-xs text-gray-400 mt-0.5">{e.date}</p>
                       </div>
                       <span
-                        className={`text-sm font-medium whitespace-nowrap ml-3 ${
-                          e.entry_type === "income" ? "text-blue-600" : "text-gray-700"
-                        }`}
+                        className={
+                          "text-sm font-medium whitespace-nowrap ml-3 " +
+                          (e.entry_type === "income" ? "text-blue-600" : "text-gray-700")
+                        }
                       >
                         {e.entry_type === "income" ? "+" : "-"}¥
                         {(e.entry_type === "income" ? e.credit_amount : e.debit_amount).toLocaleString()}
@@ -227,10 +234,7 @@ export default function ReceiptsDashboard() {
             )}
 
             {lineUserId && (
-              
-                href={`/api/receipts/export?lineUserId=${encodeURIComponent(lineUserId)}`}
-                className="inline-block mt-4 text-sm text-blue-600 hover:underline"
-              >
+              <a href={exportHref} className="inline-block mt-4 text-sm text-blue-600 hover:underline">
                 CSVでダウンロード（弥生形式）
               </a>
             )}
