@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateReceiptUser } from "@/lib/receipts/users";
 import { analyzeReceiptImages } from "@/lib/receipts/analyzeReceiptImages";
 import { analyzeIncomeText } from "@/lib/receipts/analyzeIncomeText";
+import { getMonthlySummary } from "@/lib/receipts/monthlySummary";
 import { supabase } from "@/lib/supabase";
 
 const RECEIPT_LINE_CHANNEL_ACCESS_TOKEN =
@@ -170,6 +171,33 @@ async function analyzeAndReplyIncome(lineUserId: string, text: string) {
   }
 }
 
+async function replyMonthlySummary(lineUserId: string, replyToken: string) {
+  const receiptUser = await getOrCreateReceiptUser(lineUserId);
+
+  if (!receiptUser) {
+    await replyToLine(replyToken, "アカウント情報の取得に失敗しました。もう一度お試しください。");
+    return;
+  }
+
+  try {
+    const summary = await getMonthlySummary(receiptUser.id);
+    const [year, month] = summary.yearMonth.split("-");
+
+    const text =
+      `📊 ${year}年${Number(month)}月の収支\n\n` +
+      `収入：${summary.incomeTotal.toLocaleString()}円\n` +
+      `支出：${summary.expenseTotal.toLocaleString()}円\n` +
+      `------------------\n` +
+      `利益：${summary.profit.toLocaleString()}円\n\n` +
+      `（記帳件数：${summary.entryCount}件）`;
+
+    await replyToLine(replyToken, text);
+  } catch (e) {
+    console.error("月次サマリーエラー:", e);
+    await replyToLine(replyToken, "集計の取得に失敗しました。もう一度お試しください。");
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
@@ -188,6 +216,15 @@ export async function POST(req: NextRequest) {
 
       if (event.message.type === "text") {
         const text = event.message.text.trim();
+
+        if (
+          text.includes("今月の収支") ||
+          text.includes("収支確認") ||
+          text === "収支"
+        ) {
+          await replyMonthlySummary(lineUserId, replyToken);
+          continue;
+        }
 
         if (text.startsWith("売上") || text.startsWith("収入")) {
           await replyToLine(replyToken, "売上を記帳しています💰\n少々お待ちください！");
@@ -224,7 +261,8 @@ export async function POST(req: NextRequest) {
           "レシートの写真を送ってください🧾（経費として記帳）\n" +
             "全部送り終わったら「完了」と送ってください！\n\n" +
             "売上を記帳したい時は「売上 金額 内容」の形式で送ってください💰\n" +
-            "例：売上 250000円 6月分セッション料"
+            "例：売上 250000円 6月分セッション料\n\n" +
+            "「今月の収支」と送ると集計が見れます📊"
         );
         continue;
       }
