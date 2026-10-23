@@ -26,46 +26,75 @@ async function pushMessage(to: string, text: string) {
   });
 }
 
+// 管理画面の「メッセージ送信時間」の選択肢（0〜9）と、実際の時刻（日本時間）の対応
+const SEND_HOURS_JST = [9, 10, 11, 12, 13, 14, 15, 18, 20, 21];
+
+// 送信時間の設定を使うかどうか。
+//   false … 定期実行が「朝10時の1回だけ」の間は、これにする（送信時間の設定に関係なく、全員に朝10時に送る）
+//   true  … 定期実行を1日に何回も動かせるようにしたら、これにする（設定した時刻の人にだけ送る）
+const HONOR_SEND_HOUR = false;
+
+function jstNow(now: Date) {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return { hour: jst.getUTCHours(), day: jst.getUTCDay() };
+}
+
+function shouldSend(c: any, hour: number, day: number): boolean {
+  if (!c.lineUserId) return false;
+  if (c.messageEnabled === false) return false;
+
+  // 送信時間（選択肢の番号 → 日本時間の時刻）。未設定・不正な値は朝10時
+  if (HONOR_SEND_HOUR) {
+    const targetHour = SEND_HOURS_JST[Number(c.messageHour ?? 1)] ?? 10;
+    if (targetHour !== hour) return false;
+  }
+
+  // 頻度
+  const freq = c.messageFrequency ?? "daily";
+  if (freq === "weekdays") return day >= 1 && day <= 5;
+  if (freq === "three_times") return [1, 3, 5].includes(day);
+  if (freq === "weekly") return day === 1;
+  return true;
+}
+
+// GET /api/cron/daily-message
+//   ?dryRun=1            送らずに、誰に送る予定かだけ返す
+//   ?dryRun=1&hour=18    （テスト用）日本時間18時に誰に送るかを見る
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
+    const p = req.nextUrl.searchParams;
+    const dryRun = p.get("dryRun") === "1";
+    const jst = jstNow(new Date());
+    const hour = dryRun && p.get("hour") !== null ? Number(p.get("hour")) : jst.hour;
+
     const clients = await getClients();
-    const now = new Date();
-    const currentHour = now.getUTCHours();
-    const currentDay = now.getUTCDay();
+    const targets = clients.filter((c: any) => shouldSend(c, hour, jst.day));
 
-    const lineClients = clients.filter((c: any) => {
-      if (!c.lineUserId) return false;
-      if (c.messageEnabled === false) return false;
-
-      // 時間チェック（UTC）
-      const currentHour = (now.getUTCHours() + 9) % 24;
-      const targetHour = c.messageHour ?? 1;
-      if (targetHour !== currentHour) return false;
-
-      // 頻度チェック
-      const freq = c.messageFrequency ?? "daily";
-      if (freq === "daily") return true;
-      if (freq === "weekdays") return currentDay >= 1 && currentDay <= 5;
-      if (freq === "three_times") return [1, 3, 5].includes(currentDay);
-      if (freq === "weekly") return currentDay === 1;
-      return true;
-    });
+    if (dryRun) {
+      return NextResponse.json({
+        dryRun: true,
+        hour,
+        honorSendHour: HONOR_SEND_HOUR,
+        day: jst.day,
+        targets: targets.map((c: any) => c.name || c.id),
+      });
+    }
 
     const message = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
 
     let sentCount = 0;
-    for (const client of lineClients) {
+    for (const client of targets) {
       await pushMessage((client as any).lineUserId, message);
       sentCount++;
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
-    return NextResponse.json({ success: true, sentCount });
+    return NextResponse.json({ success: true, hour, honorSendHour: HONOR_SEND_HOUR, sentCount });
   } catch (error) {
     console.error("cron error:", error);
     return NextResponse.json({ error: "Failed" }, { status: 500 });
