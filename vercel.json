@@ -1,5 +1,7 @@
 {
-  "regions": ["hnd1"],
+  "regions": [
+    "hnd1"
+  ],
   "functions": {
     "src/app/api/**": {
       "maxDuration": 60
@@ -13,6 +15,10 @@
     {
       "path": "/api/cron/weekly-food-suggestion",
       "schedule": "0 1 * * 1"
+    },
+    {
+      "path": "/api/cron/weight-report",
+      "schedule": "0 11 * * 0"
     }
   ]
 }

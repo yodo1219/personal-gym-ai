@@ -11,6 +11,7 @@ import {
 } from "@/lib/prompts";
 import { checkDanger } from "@/lib/danger-check";
 import { supabase } from "@/lib/supabase";
+import { handleWeightMessage } from "@/lib/weight";
 import { v4 as uuidv4 } from "uuid";
 import OpenAI from "openai";
 
@@ -233,6 +234,13 @@ export async function POST(req: NextRequest) {
 
       if (event.message.type === "text") {
         const text = event.message.text.trim();
+        // 体重の報告（「体重 72.5」など）なら記録して返信する
+        const weightReply = await handleWeightMessage(lineUserId, text);
+        if (weightReply) {
+          await replyToLine(replyToken, weightReply);
+          continue;
+        }
+
 
         // 完了ワード
         if (
